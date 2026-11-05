@@ -16,7 +16,10 @@ pub fn migrate_version(version: u32) -> CoreResult<u32> {
     match version {
         // Version 0 documents predate the explicit schema field; their state
         // shape is compatible, so the migration only records the new version.
-        0 => Ok(1),
+        0 => migrate_version(1),
+        // Version 1 gains workspace layout, connection history, and optional
+        // favorite paths through serde defaults, so the migration is additive.
+        1 => Ok(SCHEMA_VERSION),
         SCHEMA_VERSION => Ok(SCHEMA_VERSION),
         other => Err(CoreError::internal(format!(
             "unsupported metadata schema version {other}"

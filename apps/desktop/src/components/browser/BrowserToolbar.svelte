@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import BreadcrumbBar from "./BreadcrumbBar.svelte";
   import type { SortKey } from "../../lib/ipc/types";
 
   let {
@@ -34,17 +34,6 @@
     onsort: (key: SortKey) => void;
   } = $props();
 
-  let draft = $state(untrack(() => path));
-
-  $effect(() => {
-    draft = path;
-  });
-
-  function submit(event: SubmitEvent) {
-    event.preventDefault();
-    onnavigate(draft.trim());
-  }
-
   function changeSort(event: Event) {
     const key = (event.currentTarget as HTMLSelectElement).value as SortKey;
     sortKey = key;
@@ -52,7 +41,7 @@
   }
 </script>
 
-<form class="toolbar" onsubmit={submit} aria-label="Browser controls">
+<div class="toolbar" role="toolbar" aria-label="Browser controls">
   <button type="button" onclick={onback} disabled={!canGoBack} title="Back">←</button>
   <button type="button" onclick={onforward} disabled={!canGoForward} title="Forward"
     >→</button
@@ -61,13 +50,7 @@
     >↑</button
   >
   <button type="button" onclick={onrefresh} disabled={loading} title="Refresh">⟳</button>
-  <input
-    class="location"
-    bind:value={draft}
-    aria-label="Current path"
-    spellcheck="false"
-    autocomplete="off"
-  />
+  <BreadcrumbBar {path} hasLocation={Boolean(path)} {onnavigate} />
   <input
     class="filter"
     bind:value={filter}
@@ -88,8 +71,7 @@
     <input type="checkbox" bind:checked={showHidden} />
     Hidden
   </label>
-  <button type="submit">Go</button>
-</form>
+</div>
 
 <style>
   .toolbar {
@@ -98,12 +80,6 @@
     align-items: center;
     gap: 0.35rem;
     margin-bottom: 0.5rem;
-  }
-  .location {
-    flex: 1 1 12rem;
-    min-width: 8rem;
-    padding: 0.25rem;
-    font: inherit;
   }
   .filter {
     flex: 0 1 8rem;

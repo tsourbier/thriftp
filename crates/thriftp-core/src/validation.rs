@@ -1,5 +1,37 @@
+use std::path::Path;
+
 use crate::error::{CoreError, CoreResult};
 use crate::model::{AuthMethod, ConnectionProfile, CredentialRef, DirectoryFavorite, Protocol};
+
+/// Trim an optional path and normalize an empty value to `None`.
+#[must_use]
+pub fn normalize_optional_path(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim().to_owned();
+        (!trimmed.is_empty()).then_some(trimmed)
+    })
+}
+
+/// Validate optional favorite working paths.
+///
+/// Local paths must be absolute according to the client OS. Remote paths must
+/// be server-side absolute POSIX paths. No shell or environment expansion is
+/// performed.
+pub fn validate_favorite_paths(local: Option<&str>, remote: Option<&str>) -> CoreResult<()> {
+    if let Some(local) = local
+        && !Path::new(local).is_absolute()
+    {
+        return Err(CoreError::validation("localPath must be an absolute path"));
+    }
+    if let Some(remote) = remote
+        && !remote.starts_with('/')
+    {
+        return Err(CoreError::validation(
+            "remotePath must be an absolute server path",
+        ));
+    }
+    Ok(())
+}
 
 pub fn validate_profile(profile: &ConnectionProfile) -> CoreResult<()> {
     let name = profile.display_name.trim();

@@ -6,7 +6,6 @@ use std::process::{Child, Command, Stdio};
 use base64::Engine;
 use chrono::{Duration, Utc};
 use ed25519_dalek::{Signer, SigningKey};
-use rand_core::OsRng;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use thriftp_core::automation::{
@@ -85,7 +84,7 @@ struct Fixture {
 
 fn fixture(operations: Vec<&str>, expires_at: Option<chrono::DateTime<Utc>>) -> Fixture {
     let home = TempDir::new().unwrap();
-    let signing = SigningKey::generate(&mut OsRng);
+    let signing = SigningKey::generate(&mut rand::rng());
     let public_key = base64_encode(signing.verifying_key().as_bytes());
     let fingerprint = fingerprint(&public_key).unwrap();
     let profile = ConnectionProfile::new(

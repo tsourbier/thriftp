@@ -1416,13 +1416,13 @@ pub async fn queue_resume(
         let mut manager = state.transfers.lock().await;
         manager.queue.resume();
         for transfer in manager.queue.list() {
-            if transfer.state == TransferState::Paused {
-                if let Ok(control) = manager.control(transfer.id) {
-                    control.resume();
-                    let _ = manager
-                        .queue
-                        .mark_state(transfer.id, TransferState::Pending);
-                }
+            if transfer.state == TransferState::Paused
+                && let Ok(control) = manager.control(transfer.id)
+            {
+                control.resume();
+                let _ = manager
+                    .queue
+                    .mark_state(transfer.id, TransferState::Pending);
             }
         }
         emit_queue_state(&app, &manager.queue.queue);

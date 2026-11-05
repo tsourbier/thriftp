@@ -50,6 +50,16 @@ pub struct DisconnectedView {
     pub disconnected: bool,
 }
 
+/// Result of explicitly trusting an SSH host key.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustedHostKeyView {
+    /// Always true after the trust decision is stored.
+    pub trusted: bool,
+    /// Normalized SHA-256 fingerprint that was stored.
+    pub fingerprint: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionTestView {

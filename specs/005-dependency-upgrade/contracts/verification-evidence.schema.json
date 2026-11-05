@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thriftp.dev/schemas/verification-evidence.schema.json",
+  "title": "Verification Evidence",
+  "description": "Proof that an upgrade batch or the final baseline satisfies the required quality gates.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "batchId",
+    "kind",
+    "command",
+    "environment",
+    "result",
+    "summary",
+    "capturedAt"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "batchId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "test",
+        "audit",
+        "benchmark",
+        "build",
+        "package",
+        "license",
+        "sbom",
+        "security-review",
+        "reproducibility",
+        "platform"
+      ]
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Operating system, toolchain, and relevant runtime."
+    },
+    "result": {
+      "type": "string",
+      "enum": ["pass", "fail", "warning"]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact": {
+      "type": "string"
+    },
+    "capturedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "$comment": "A fail result blocks the related batch from being verified. A warning requires explicit review and either resolution or an approved exception."
+}

@@ -10,6 +10,10 @@
    cargo fmt --all -- --check
    cargo clippy --workspace --all-targets -- -D warnings
    cargo test --workspace --locked
+   RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+   python3 scripts/validate-dependency-records.py specs/005-dependency-upgrade --release
+   python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+   scripts/check-dependency-policy.sh
    (cd apps/desktop && npm ci && npm run lint && npm run format && npm test && npm run build)
    scripts/test-integration.sh
    scripts/verify-reproducible-build.sh

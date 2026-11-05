@@ -1,7 +1,8 @@
 # Desktop client
 
 The desktop client is a Tauri 2 shell over `thriftp-core`, with a Svelte 5
-dual-pane interface.
+dual-pane interface. The pinned baseline is Tauri 2.12.5, Rust 1.99.1, and
+Node.js 26.13.0 LTS.
 
 ## Features
 
@@ -33,7 +34,10 @@ Long-running operations stream events:
 - `queue:state` for queue changes.
 
 The UI treats certificate, host-key, credential-store, missing-credential, and
-rejected-credential errors as distinct states.
+rejected-credential errors as distinct states. Unknown and changed SSH host keys
+open a verification prompt that displays the SHA-256 fingerprint and offers
+Cancel or Trust and connect; changing an already trusted key requires an extra
+acknowledgement.
 
 ## Keyboard and accessibility
 
@@ -47,3 +51,28 @@ rejected-credential errors as distinct states.
 On normal quit the shell pauses the queue, gives active transfers a two-second
 grace period to stop at a chunk boundary, then cancels anything still running.
 Queue and transfer state are checkpointed through the JSON stores.
+
+## Workspace refresh
+
+The desktop shell is an always-visible dual-pane workspace: the local browser is
+always on the left and the remote browser or disconnected connection hub is on
+the right. A far-left sidebar groups saved servers, directory favorites, and
+automation. The pane split is draggable and keyboard-adjustable; the split,
+sidebar state, and last hub tab are persisted in `metadata.json`.
+
+When no connection is active, the right pane shows Favorites and History tabs.
+History records successful connections only, keeps one entry per saved server,
+is capped at 50 entries, and is clearable without touching favorites or
+credentials. Favorite server records may also store optional absolute local and
+remote folders; reconnecting restores both, falling back to the nearest
+accessible ancestor and then home or the server login folder.
+
+Cmd/Ctrl+K opens the command palette for saved servers, directory favorites,
+open tabs, and safe actions. Destructive and transfer-queue actions are
+intentionally excluded. Both panes use breadcrumbs with an editable path mode
+(Ctrl/Cmd+L), and long paths collapse middle segments into an overflow control.
+
+SFTP key authentication discovers conventional private keys in the platform
+SSH directory and exposes a key button beside the field for the native file
+chooser. Discovery returns file names and paths only; key contents are never
+read or displayed.

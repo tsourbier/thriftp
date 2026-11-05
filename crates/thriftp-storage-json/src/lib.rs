@@ -19,11 +19,12 @@ pub mod server_favorites;
 
 pub use transfers::JsonTransferStore;
 
-pub(crate) const SCHEMA_VERSION: u32 = 1;
+pub(crate) const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MetadataDocument {
+    #[serde(default)]
     schema_version: u32,
     #[serde(flatten)]
     state: AppState,

@@ -215,10 +215,10 @@ async fn sftp_rejects_unknown_host_keys() {
         .connect(&profile, Some(Secret::new(PASSWORD.as_bytes().to_vec())))
         .await
         .unwrap_err();
-    assert_eq!(
+    assert!(matches!(
         error,
-        CoreError::HostKeyUnknown("the server key is not present in known_hosts".to_owned())
-    );
+        CoreError::HostKeyUnknown { fingerprint, .. } if !fingerprint.is_empty()
+    ));
 }
 
 #[tokio::test]

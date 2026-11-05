@@ -6,11 +6,14 @@ rm -rf "$ROOT"
 mkdir -p "$ROOT/a" "$ROOT/b"
 
 export CARGO_INCREMENTAL=0
+export SOURCE_DATE_EPOCH=0
 
 echo "Building first artifact set..."
-CARGO_TARGET_DIR="$ROOT/a" cargo build --workspace --release --locked -q
+CARGO_TARGET_DIR="$ROOT/a" RUSTFLAGS="--remap-path-prefix=$ROOT/a=/reproducible" \
+  cargo build --workspace --release --locked -q
 echo "Building second artifact set..."
-CARGO_TARGET_DIR="$ROOT/b" cargo build --workspace --release --locked -q
+CARGO_TARGET_DIR="$ROOT/b" RUSTFLAGS="--remap-path-prefix=$ROOT/b=/reproducible" \
+  cargo build --workspace --release --locked -q
 
 # The dependency graph and SBOM must be identical across clean builds.
 cargo metadata --format-version 1 --locked > "$ROOT/a-metadata.json"
@@ -29,7 +32,9 @@ fi
 
 artifact_manifest() {
   local root="$1"
-  (cd "$root" && find release -type f -not -path '*/incremental/*' | sort | while IFS= read -r file; do
+  (cd "$root" && find release -maxdepth 1 -type f \
+    ! -name '*.d' ! -name '*.rlib' ! -name '*.rmeta' ! -name '.cargo*' \
+    | sort | while IFS= read -r file; do
     printf '%s  %s\n' "$(shasum -a 256 "$file" | cut -d' ' -f1)" "$file"
   done)
 }

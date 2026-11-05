@@ -21,6 +21,7 @@ export type DesktopError = {
   message: string;
   field?: string;
   retryable?: boolean;
+  fingerprint?: string;
 };
 
 export type ConnectionProfileInput = {
@@ -210,6 +211,62 @@ export type FileMetadata = {
 
 export type CredentialPolicy = "save" | "ask";
 export type FavoriteSortKey = "name" | "protocol" | "host" | "lastUsed";
+export type HubTab = "favorites" | "history";
+export type SidebarSectionKey = "servers" | "directoryFavorites" | "automation";
+
+export type WorkspaceLayout = {
+  splitRatio: number;
+  sidebarVisible: boolean;
+  sidebarSections: Record<SidebarSectionKey, boolean>;
+  hubTab: HubTab;
+};
+
+export type ConnectionHistoryEntry = {
+  favoriteId: string | null;
+  connectionProfileId: string;
+  displayName: string;
+  protocol: Protocol;
+  host: string;
+  port: number;
+  username: string;
+  lastUsedAt: string;
+};
+
+export type SshKeyCandidate = {
+  fileName: string;
+  path: string;
+};
+
+export type SshKeyListing = {
+  directory: string;
+  exists: boolean;
+  readable: boolean;
+  candidates: SshKeyCandidate[];
+};
+
+export type SshKeyValidation = {
+  valid: boolean;
+  code?: "missing" | "not_a_file" | "unreadable" | "public_key" | "unsupported";
+  message?: string;
+};
+
+export type PathSource = "local" | "remote";
+export type PathFallback = "none" | "ancestor" | "home" | "login";
+
+export type PathResolution = {
+  originalPath: string;
+  path: string;
+  fallback: PathFallback;
+  notice?: {
+    code: string;
+    message: string;
+  };
+};
+
+export type HistoryClearResult = {
+  cleared: boolean;
+  removed: number;
+};
 
 export type ServerFavoriteInput = {
   displayName: string;
@@ -222,6 +279,8 @@ export type ServerFavoriteInput = {
   timeoutSeconds: number;
   sshKeyRef?: string | null;
   pinned?: boolean;
+  localPath?: string | null;
+  remotePath?: string | null;
 };
 
 export type ServerFavoriteView = ServerFavoriteInput & {
@@ -231,6 +290,8 @@ export type ServerFavoriteView = ServerFavoriteInput & {
   lastUsedAt: string | null;
   credentialPolicy: CredentialPolicy;
   hasSavedCredential: boolean;
+  localPath: string | null;
+  remotePath: string | null;
   createdAt: string;
   updatedAt: string;
   credentialWarning?: {

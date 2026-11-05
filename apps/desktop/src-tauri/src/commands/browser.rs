@@ -10,6 +10,7 @@ use thriftp_core::browser::listing::{
 use thriftp_core::connections::ConnectionService;
 use thriftp_core::error::{CoreError, CoreResult};
 use thriftp_core::model::FileEntry;
+use thriftp_core::navigation::{self, PathFallback, PathResolution};
 use uuid::Uuid;
 
 use crate::AppState;
@@ -102,16 +103,16 @@ fn emit_batch(app: &AppHandle, listing_id: &str, batch: ListingBatch) {
 }
 
 fn finish(app: &AppHandle, registry: &BrowserListings, id: Uuid, result: CoreResult<()>) {
-    if let Err(error) = result {
-        if !matches!(error, CoreError::Cancelled) {
-            let _ = app.emit(
-                "directory:error",
-                DirectoryErrorPayload {
-                    listing_id: id.to_string(),
-                    error: DesktopError::from(error),
-                },
-            );
-        }
+    if let Err(error) = result
+        && !matches!(error, CoreError::Cancelled)
+    {
+        let _ = app.emit(
+            "directory:error",
+            DirectoryErrorPayload {
+                listing_id: id.to_string(),
+                error: DesktopError::from(error),
+            },
+        );
     }
     registry.remove(id);
 }
@@ -421,4 +422,52 @@ pub async fn browser_chmod(
     browser::permissions::chmod_remote(remote.as_mut(), &path, mode)
         .await
         .map_err(DesktopError::from)
+}
+
+/// Resolve a saved local or remote path to an accessible location.
+#[tauri::command]
+pub async fn browser_resolve_path(
+    state: State<'_, AppState>,
+    source: String,
+    path: String,
+    connection_id: Option<String>,
+) -> Result<PathResolution, DesktopError> {
+    match source.as_str() {
+        "local" => Ok(navigation::resolve_local(&path)),
+        "remote" => {
+            let connection_id = parse_id(connection_id.as_deref().unwrap_or_default())
+                .map_err(DesktopError::from)?;
+            let shared = {
+                let service = state.connections.lock().await;
+                service.session(connection_id).map_err(DesktopError::from)?
+            };
+            let mut remote = shared.lock().await;
+            if let Ok(entry) = remote.stat(&path).await
+                && entry.entry_type == thriftp_core::model::EntryType::Directory
+            {
+                return Ok(PathResolution::new(&path, &path, PathFallback::None, None));
+            }
+            for candidate in navigation::posix_ancestor_candidates(&path) {
+                if let Ok(entry) = remote.stat(&candidate).await
+                    && entry.entry_type == thriftp_core::model::EntryType::Directory
+                {
+                    return Ok(PathResolution::new(
+                        &path,
+                        candidate,
+                        PathFallback::Ancestor,
+                        Some("The saved remote folder could not be opened. Using the nearest available folder instead.".to_owned()),
+                    ));
+                }
+            }
+            Ok(PathResolution::new(
+                &path,
+                ".",
+                PathFallback::Login,
+                Some("The saved remote folder could not be opened. Using the server login folder instead.".to_owned()),
+            ))
+        }
+        other => Err(DesktopError::from(CoreError::Validation(format!(
+            "unknown path source: {other}"
+        )))),
+    }
 }

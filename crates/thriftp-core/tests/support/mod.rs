@@ -63,12 +63,14 @@ impl RemoteFs for FakeRemoteFs {
             "certificate.invalid" => Err(CoreError::CertificateInvalid(
                 "the TLS certificate is not trusted".to_owned(),
             )),
-            "hostkey.unknown" => Err(CoreError::HostKeyUnknown(
-                "the host key is not present in known_hosts".to_owned(),
-            )),
-            "hostkey.changed" => Err(CoreError::HostKeyChanged(
-                "the host key no longer matches known_hosts".to_owned(),
-            )),
+            "hostkey.unknown" => Err(CoreError::HostKeyUnknown {
+                fingerprint: "abc123".to_owned(),
+                detail: "the host key is not present in known_hosts".to_owned(),
+            }),
+            "hostkey.changed" => Err(CoreError::HostKeyChanged {
+                fingerprint: "abc123".to_owned(),
+                detail: "the host key no longer matches known_hosts".to_owned(),
+            }),
             "key.missing" => Err(CoreError::AuthFailed(
                 "the SSH private-key file is missing or was moved".to_owned(),
             )),

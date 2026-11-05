@@ -1,0 +1,130 @@
+[
+  {
+    "id": "EX-001",
+    "component": "typescript",
+    "currentVersion": "6.0.3",
+    "latestStableVersion": "7.0.2",
+    "reason": "peer-conflict",
+    "description": "TypeScript 7.0.2 is the latest stable release, but typescript-eslint 8.72.1 declares a peer range below 6.1.0. TypeScript 6.0.3 preserves type-aware lint coverage.",
+    "risk": "TypeScript 7 language and checker improvements are unavailable until upstream peer support lands.",
+    "mitigation": "Remain on TypeScript 6.0.3 with full type checking and ESLint coverage; review when typescript-eslint widens its peer range.",
+    "owner": "maintainer",
+    "approvedBy": "maintainer",
+    "createdAt": "2026-11-05",
+    "expiresAt": "2027-05-05",
+    "reviewDate": "2026-12-05",
+    "status": "approved",
+    "peerConstraint": "typescript-eslint 8.72.1 requires typescript >=4.8.4 <6.1.0"
+  },
+  {
+    "id": "EX-002",
+    "component": "deepmerge",
+    "currentVersion": "4.3.1",
+    "latestStableVersion": "4.3.1",
+    "reason": "no-fixed-release",
+    "description": "The latest stable deepmerge release remains affected by GHSA-gcqx-w48m-w2h4 (prototype poisoning). It is a transitive build/test dependency of @sveltejs/vite-plugin-svelte.",
+    "risk": "Low-severity prototype-poisoning risk limited to build/test tooling; it is not shipped in the desktop runtime bundle.",
+    "mitigation": "Keep the dependency in development scope only, review upstream releases, and replace it when a fixed release is published.",
+    "owner": "maintainer",
+    "approvedBy": "maintainer",
+    "createdAt": "2026-11-05",
+    "expiresAt": "2027-05-05",
+    "reviewDate": "2026-12-05",
+    "status": "approved",
+    "advisoryIds": [
+      "GHSA-gcqx-w48m-w2h4"
+    ]
+  },
+  {
+    "id": "EX-003",
+    "component": "minimatch",
+    "currentVersion": "10.2.6",
+    "latestStableVersion": "11.0.4",
+    "reason": "peer-conflict",
+    "description": "GHSA-g3hv-75wg-m249 was resolved by an approved npm override to minimatch 11.0.4. The exception is retained closed for audit history.",
+    "risk": "Moderate denial-of-service risk in build/test tooling only; not shipped in the desktop runtime bundle.",
+    "mitigation": "npm overrides pins minimatch 11.0.4 across the frontend toolchain; lint and build tests pass.",
+    "owner": "maintainer",
+    "approvedBy": "maintainer",
+    "createdAt": "2026-11-05",
+    "expiresAt": "2027-05-05",
+    "reviewDate": "2026-12-05",
+    "status": "closed",
+    "peerConstraint": "eslint 10.14.0 and typescript-eslint 8.72.1 resolve minimatch 10.x",
+    "advisoryIds": [
+      "GHSA-g3hv-75wg-m249"
+    ]
+  },
+  {
+    "id": "EX-004",
+    "component": "rsa",
+    "currentVersion": "0.10.0-rc.18",
+    "latestStableVersion": "0.9.10",
+    "reason": "no-fixed-release",
+    "description": "russh 0.65.1 resolves rsa 0.10.0-rc.18, which is affected by RUSTSEC-2023-0071 (Marvin timing side channel). RustSec reports no fixed upgrade.",
+    "risk": "Medium-severity timing side channel in RSA signing; only relevant when RSA host/user keys are used.",
+    "mitigation": "Prefer Ed25519 keys; keep SSH transport verification enabled; track the upstream stable rsa release and replace when available.",
+    "owner": "maintainer",
+    "approvedBy": "maintainer",
+    "createdAt": "2026-11-05",
+    "expiresAt": "2027-05-05",
+    "reviewDate": "2026-12-05",
+    "status": "approved",
+    "advisoryIds": [
+      "RUSTSEC-2023-0071"
+    ]
+  },
+  {
+    "id": "EX-005",
+    "component": "ssh-key",
+    "currentVersion": "0.7.0-rc.11",
+    "latestStableVersion": "0.6.0",
+    "reason": "no-stable-release",
+    "description": "russh 0.65.1 resolves the pre-release ssh-key 0.7.0-rc.11. No stable russh release provides a compatible stable ssh-key dependency yet.",
+    "risk": "Pre-release parsing code is used for SSH key handling; covered by the existing SSH, host-key, and security test suites.",
+    "mitigation": "Keep host-key verification and secret redaction tests enabled; replace when russh ships a stable ssh-key dependency.",
+    "owner": "maintainer",
+    "approvedBy": "maintainer",
+    "createdAt": "2026-11-05",
+    "expiresAt": "2027-05-05",
+    "reviewDate": "2026-12-05",
+    "status": "approved"
+  },
+  {
+    "id": "EX-006",
+    "component": "zbus_names/zvariant/zvariant_derive",
+    "currentVersion": "5.15.1",
+    "latestStableVersion": "5.15.1",
+    "reason": "other",
+    "description": "The zbus 5.15.1 stack used by the Linux Secret Service credential backend is marked unmaintained by RustSec.",
+    "risk": "Maintenance risk on Linux only; no known vulnerability and no weaker credential path.",
+    "mitigation": "Track keyring and secret-service releases; replace the backend when a maintained zbus line is adopted.",
+    "owner": "maintainer",
+    "approvedBy": "maintainer",
+    "createdAt": "2026-11-05",
+    "expiresAt": "2027-05-05",
+    "reviewDate": "2026-12-05",
+    "status": "approved",
+    "advisoryIds": [
+      "RUSTSEC-2026-0370",
+      "RUSTSEC-2026-0371",
+      "RUSTSEC-2026-0372"
+    ]
+  },
+  {
+    "id": "EX-007",
+    "component": "pkcs1",
+    "currentVersion": "0.8.0-rc.4",
+    "latestStableVersion": "0.7.5",
+    "reason": "no-stable-release",
+    "description": "russh 0.65.1 resolves pkcs1 0.8.0-rc.4 through rsa 0.10.0-rc.18. No stable compatible release exists yet.",
+    "risk": "Pre-release ASN.1/RSA parsing code is used only for RSA key handling; covered by SSH and security tests.",
+    "mitigation": "Prefer Ed25519 keys; keep protocol/security suites enabled; replace when rsa ships a stable dependency set.",
+    "owner": "maintainer",
+    "approvedBy": "maintainer",
+    "createdAt": "2026-11-05",
+    "expiresAt": "2027-05-05",
+    "reviewDate": "2026-12-05",
+    "status": "approved"
+  }
+]

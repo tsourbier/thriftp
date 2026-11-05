@@ -6,7 +6,11 @@ import type {
 } from "../ipc/types";
 
 /** Prefill the save-as-favorite form from an active connection. */
-export async function prefillFavorite(connectionId: string): Promise<{
+export async function prefillFavorite(
+  connectionId: string,
+  localPath?: string | null,
+  remotePath?: string | null
+): Promise<{
   initial: ServerFavoriteInput;
   favoriteId?: string;
 }> {
@@ -23,7 +27,9 @@ export async function prefillFavorite(connectionId: string): Promise<{
       authMethod: profile.authMethod,
       timeoutSeconds: profile.timeoutSeconds,
       sshKeyRef: profile.sshKeyRef ?? null,
-      pinned: false
+      pinned: false,
+      localPath: localPath ?? null,
+      remotePath: remotePath ?? null
     },
     favoriteId: result.favoriteId
   };

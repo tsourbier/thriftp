@@ -108,6 +108,9 @@
         {#if favorite.groupLabel}
           <span class="group-label">Group: {favorite.groupLabel}</span>
         {/if}
+        {#if favorite.remotePath}
+          <span class="path">{favorite.remotePath}</span>
+        {/if}
         {#if favorite.credentialPolicy === "save"}
           <span class="credential">credentials saved</span>
         {/if}

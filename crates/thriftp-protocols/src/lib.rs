@@ -11,7 +11,10 @@ pub mod traits {
 }
 
 pub use ftp::{FtpAdapter, FtpFactory, parse_mlsd_line};
-pub use sftp::{SftpAdapter, key_fingerprint, normalize_fingerprint, trusted_fingerprint};
+pub use sftp::{
+    SftpAdapter, forget_fingerprint, key_fingerprint, known_hosts_store_path,
+    normalize_fingerprint, trust_fingerprint, trusted_fingerprint, validate_fingerprint,
+};
 pub use traits::{RemoteFs, RemoteFsFactory};
 
 use thriftp_core::model::Protocol;

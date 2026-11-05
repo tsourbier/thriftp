@@ -19,7 +19,9 @@ use crate::model::{
     ServerFavorite,
 };
 use crate::repository::{AppState, MetadataStore};
-use crate::validation::{identity_matches, validate_profile};
+use crate::validation::{
+    identity_matches, normalize_optional_path, validate_favorite_paths, validate_profile,
+};
 
 pub mod sorting;
 
@@ -51,6 +53,12 @@ pub struct ServerFavoriteInput {
     /// Whether the favorite is pinned above unpinned entries.
     #[serde(default)]
     pub pinned: bool,
+    /// Optional absolute local folder to restore on connect.
+    #[serde(default)]
+    pub local_path: Option<String>,
+    /// Optional absolute remote folder to restore on connect.
+    #[serde(default)]
+    pub remote_path: Option<String>,
 }
 
 fn default_timeout() -> u32 {
@@ -70,6 +78,8 @@ impl From<ConnectionProfile> for ServerFavoriteInput {
             timeout_seconds: profile.timeout_seconds,
             ssh_key_ref: profile.ssh_key_ref,
             pinned: false,
+            local_path: None,
+            remote_path: None,
         }
     }
 }
@@ -127,6 +137,10 @@ pub struct ServerFavoriteView {
     pub credential_policy: CredentialPolicy,
     /// Whether a saved credential reference exists.
     pub has_saved_credential: bool,
+    /// Optional absolute local folder to restore on connect.
+    pub local_path: Option<String>,
+    /// Optional absolute remote folder to restore on connect.
+    pub remote_path: Option<String>,
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Last update timestamp.
@@ -241,7 +255,13 @@ impl ServerFavoriteService {
         credentials: &CredentialService,
     ) -> CoreResult<ServerFavoriteView> {
         let mut state = self.store.load()?;
+        let mut input = input;
+        input.local_path = normalize_optional_path(input.local_path);
+        input.remote_path = normalize_optional_path(input.remote_path);
+        validate_favorite_paths(input.local_path.as_deref(), input.remote_path.as_deref())?;
         let pinned = input.pinned;
+        let local_path = input.local_path.clone();
+        let remote_path = input.remote_path.clone();
         let profile = input.into_profile();
         validate_profile(&profile)?;
         if state
@@ -276,6 +296,8 @@ impl ServerFavoriteService {
             reference.as_ref().map(|item| item.id),
         );
         favorite.pinned = pinned;
+        favorite.local_path = local_path;
+        favorite.remote_path = remote_path;
         state.connection_profiles.push(profile.clone());
         state.server_favorites.push(favorite);
         self.store.save(&state)?;
@@ -472,6 +494,12 @@ impl ServerFavoriteService {
             .find(|profile| profile.id == old_profile_id)
             .cloned()
             .ok_or_else(|| CoreError::NotFound("connection profile".to_owned()))?;
+        let mut input = input;
+        input.local_path = normalize_optional_path(input.local_path);
+        input.remote_path = normalize_optional_path(input.remote_path);
+        validate_favorite_paths(input.local_path.as_deref(), input.remote_path.as_deref())?;
+        let local_path = input.local_path.clone();
+        let remote_path = input.remote_path.clone();
         let mut profile = input.into_profile();
         profile.id = old_profile.id;
         profile.created_at = old_profile.created_at;
@@ -577,6 +605,8 @@ impl ServerFavoriteService {
         favorite.connection_profile_id = profile.id;
         favorite.credential_policy = effective_policy;
         favorite.credential_ref_id = reference.as_ref().map(|item| item.id);
+        favorite.local_path = local_path;
+        favorite.remote_path = remote_path;
         favorite.updated_at = Utc::now();
         self.store.save(&state)?;
         let mut view = view_for(&state, profile.id).expect("updated favorite");
@@ -928,6 +958,8 @@ fn view_for(state: &AppState, profile_id: Uuid) -> Option<ServerFavoriteView> {
         credential_policy: favorite.credential_policy,
         has_saved_credential: favorite.credential_policy == CredentialPolicy::Save
             && favorite.credential_ref_id.is_some(),
+        local_path: favorite.local_path.clone(),
+        remote_path: favorite.remote_path.clone(),
         created_at: favorite.created_at,
         updated_at: favorite.updated_at,
         credential_warning: None,

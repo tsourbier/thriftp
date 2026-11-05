@@ -6,6 +6,7 @@ use tauri::{AppHandle, Emitter, State};
 use thriftp_core::connections::ConnectionService;
 use thriftp_core::credentials::Secret;
 use thriftp_core::error::{CoreError, CoreResult};
+use thriftp_core::history::ConnectionHistoryService;
 use thriftp_core::model::{CredentialPolicy, FavoritePreferences};
 use thriftp_core::server_favorites::{
     CredentialImpact, ReusableCredential, ServerFavoriteInput, ServerFavoriteView,
@@ -378,6 +379,9 @@ pub async fn favorites_connect(
     state
         .server_favorites
         .mark_used(favorite_id)
+        .map_err(DesktopError::from)?;
+    ConnectionHistoryService::new(state.metadata_store.clone())
+        .record_profile(&profile, Some(favorite_id))
         .map_err(DesktopError::from)?;
     let mut view = ConnectionView::from(connection);
     view.favorite_id = Some(favorite_id.to_string());

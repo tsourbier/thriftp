@@ -37,6 +37,8 @@ fn favorite(index: usize) -> ServerFavoriteView {
         last_used_at: (index.is_multiple_of(3)).then_some(now),
         credential_policy: CredentialPolicy::Ask,
         has_saved_credential: false,
+        local_path: None,
+        remote_path: None,
         created_at: now,
         updated_at: now,
         credential_warning: None,

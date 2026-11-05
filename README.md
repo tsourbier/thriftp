@@ -11,7 +11,10 @@ browsing, transfers, queue, tabs/favorites, inspector, previews, recovery, and
 the security/privacy controls are implemented and tested. The `002` automation
 scope adds the `thriftp` CLI and the local `thriftp-mcp` stdio/loopback server,
 including explicit enrollment, canonical scopes, a hash-chained audit trail, and
-a single-owner transfer host shared by the CLI, MCP, and desktop.
+a single-owner transfer host shared by the CLI, MCP, and desktop. The `003`
+scope adds server favorites, `004` refreshes the workspace UI, and `005`
+upgrades the dependency and toolchain baseline to Rust 1.99.1, Node.js 26.13.0,
+and Tauri 2.12.5.
 
 ## Highlights
 
@@ -26,10 +29,47 @@ a single-owner transfer host shared by the CLI, MCP, and desktop.
 
 ## Requirements
 
-- Rust 1.88.0+
-- Node 22+ and npm for the desktop UI
-- Tauri platform prerequisites
+- Rust 1.90.0+ (the pinned `rust-toolchain.toml` selects 1.99.1)
+- Node 26.13.0+ and npm for the desktop UI
+- [Tauri 2 platform prerequisites](https://v2.tauri.app/start/prerequisites/)
 - Docker only for the optional protocol integration tests
+
+## Get started
+
+Clone the repository:
+
+```bash
+git clone https://github.com/tsourbier/thriftp.git
+cd thriftp
+```
+
+Install the desktop dependencies and launch the app in development mode:
+
+```bash
+cd apps/desktop
+npm ci
+npx tauri dev
+```
+
+`npx tauri dev` starts the Vite dev server and opens the native desktop window.
+To produce an installable bundle instead, run `npx tauri build` from the same
+directory.
+
+The command-line client runs directly from the workspace:
+
+```bash
+cargo run -p thriftp-cli -- --help
+cargo run -p thriftp-cli -- profiles list
+```
+
+Install the `thriftp` binary onto your `PATH` with:
+
+```bash
+cargo install --path crates/thriftp-cli
+```
+
+See the [CLI documentation](docs/cli.md) for profiles, transfers, and the MCP
+server.
 
 ## Build and test
 

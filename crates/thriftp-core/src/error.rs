@@ -22,10 +22,20 @@ pub enum CoreError {
     AuthFailed(String),
     #[error("certificate is invalid: {0}")]
     CertificateInvalid(String),
-    #[error("server host key is unknown: {0}")]
-    HostKeyUnknown(String),
-    #[error("server host key has changed: {0}")]
-    HostKeyChanged(String),
+    #[error("server host key is unknown: {detail}")]
+    HostKeyUnknown {
+        /// SHA-256 fingerprint presented by the server, when available.
+        fingerprint: String,
+        /// Redacted diagnostic detail.
+        detail: String,
+    },
+    #[error("server host key has changed: {detail}")]
+    HostKeyChanged {
+        /// SHA-256 fingerprint presented by the server, when available.
+        fingerprint: String,
+        /// Redacted diagnostic detail.
+        detail: String,
+    },
     #[error("network error: {0}")]
     Network(String),
     #[error("operation timed out: {0}")]
@@ -100,8 +110,14 @@ impl CoreError {
             "credential_store_unavailable" => Self::CredentialStoreUnavailable(message),
             "auth_failed" => Self::AuthFailed(message),
             "certificate_invalid" => Self::CertificateInvalid(message),
-            "host_key_unknown" => Self::HostKeyUnknown(message),
-            "host_key_changed" => Self::HostKeyChanged(message),
+            "host_key_unknown" => Self::HostKeyUnknown {
+                fingerprint: String::new(),
+                detail: message,
+            },
+            "host_key_changed" => Self::HostKeyChanged {
+                fingerprint: String::new(),
+                detail: message,
+            },
             "network" => Self::Network(message),
             "timeout" => Self::Timeout(message),
             "permission_denied" => Self::PermissionDenied(message),
@@ -138,8 +154,8 @@ impl CoreError {
             Self::CredentialStoreUnavailable(_) => "credential_store_unavailable",
             Self::AuthFailed(_) => "auth_failed",
             Self::CertificateInvalid(_) => "certificate_invalid",
-            Self::HostKeyUnknown(_) => "host_key_unknown",
-            Self::HostKeyChanged(_) => "host_key_changed",
+            Self::HostKeyUnknown { .. } => "host_key_unknown",
+            Self::HostKeyChanged { .. } => "host_key_changed",
             Self::Network(_) => "network",
             Self::Timeout(_) => "timeout",
             Self::PermissionDenied(_) => "permission_denied",
@@ -173,7 +189,7 @@ impl CoreError {
             Self::CredentialMissing | Self::CredentialRejected | Self::AuthFailed(_) => 3,
             Self::CredentialStoreUnavailable(_) | Self::AuditUnavailable(_) => 11,
             Self::Network(_) | Self::Timeout(_) | Self::CertificateInvalid(_) => 4,
-            Self::HostKeyUnknown(_) | Self::HostKeyChanged(_) => 5,
+            Self::HostKeyUnknown { .. } | Self::HostKeyChanged { .. } => 5,
             Self::PermissionDenied(_) => 5,
             Self::UnsupportedCapability(_) | Self::UnsupportedProtocolVersion(_) => 12,
             Self::Cancelled => 7,
@@ -205,6 +221,22 @@ impl CoreError {
         )
     }
 
+    /// SHA-256 fingerprint presented by the server for host-key failures.
+    ///
+    /// The value is normalized without the `SHA256:` prefix. It is `None` when
+    /// the failure did not carry a server key.
+    #[must_use]
+    pub fn host_key_fingerprint(&self) -> Option<&str> {
+        match self {
+            Self::HostKeyUnknown { fingerprint, .. } | Self::HostKeyChanged { fingerprint, .. }
+                if !fingerprint.is_empty() =>
+            {
+                Some(fingerprint)
+            }
+            _ => None,
+        }
+    }
+
     /// Best-effort field name for validation errors.
     #[must_use]
     pub fn field(&self) -> Option<String> {
@@ -232,7 +264,11 @@ mod tests {
         assert_eq!(CoreError::CredentialMissing.code(), "credential_missing");
         assert_eq!(CoreError::CredentialRejected.code(), "credential_rejected");
         assert_eq!(
-            CoreError::HostKeyChanged("line 2".to_owned()).code(),
+            CoreError::HostKeyChanged {
+                fingerprint: "abc".to_owned(),
+                detail: "line 2".to_owned(),
+            }
+            .code(),
             "host_key_changed"
         );
         assert_eq!(CoreError::Timeout("connect".to_owned()).code(), "timeout");
@@ -253,8 +289,14 @@ mod tests {
             CoreError::CredentialStoreUnavailable("x".to_owned()),
             CoreError::AuthFailed("x".to_owned()),
             CoreError::CertificateInvalid("x".to_owned()),
-            CoreError::HostKeyUnknown("x".to_owned()),
-            CoreError::HostKeyChanged("x".to_owned()),
+            CoreError::HostKeyUnknown {
+                fingerprint: "x".to_owned(),
+                detail: "x".to_owned(),
+            },
+            CoreError::HostKeyChanged {
+                fingerprint: "x".to_owned(),
+                detail: "x".to_owned(),
+            },
             CoreError::Network("x".to_owned()),
             CoreError::Timeout("x".to_owned()),
             CoreError::PermissionDenied("x".to_owned()),
@@ -299,6 +341,12 @@ mod tests {
         assert!(CoreError::Timeout("connect".to_owned()).retryable());
         assert!(CoreError::HostUnavailable("down".to_owned()).retryable());
         assert!(!CoreError::CredentialRejected.retryable());
-        assert!(!CoreError::HostKeyChanged("line 2".to_owned()).retryable());
+        assert!(
+            !CoreError::HostKeyChanged {
+                fingerprint: "abc".to_owned(),
+                detail: "line 2".to_owned(),
+            }
+            .retryable()
+        );
     }
 }

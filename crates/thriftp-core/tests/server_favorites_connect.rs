@@ -24,6 +24,8 @@ fn input(name: &str) -> ServerFavoriteInput {
         timeout_seconds: 30,
         ssh_key_ref: None,
         pinned: false,
+        local_path: None,
+        remote_path: None,
     }
 }
 
@@ -268,8 +270,12 @@ async fn certificate_and_host_key_failures_never_bypass_verification() {
             "certificate.invalid" => {
                 assert!(matches!(error, CoreError::CertificateInvalid(_)))
             }
-            "hostkey.unknown" => assert!(matches!(error, CoreError::HostKeyUnknown(_))),
-            "hostkey.changed" => assert!(matches!(error, CoreError::HostKeyChanged(_))),
+            "hostkey.unknown" => {
+                assert!(matches!(error, CoreError::HostKeyUnknown { .. }))
+            }
+            "hostkey.changed" => {
+                assert!(matches!(error, CoreError::HostKeyChanged { .. }))
+            }
             _ => unreachable!(),
         }
         assert!(service.get(favorite.id).unwrap().last_used_at.is_none());

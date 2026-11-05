@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   BrowsingSession,
   BrowserSource,
+  ConnectionHistoryEntry,
   ConnectionProfile,
   ConnectionTestResult,
   ConnectionView,
@@ -11,7 +12,10 @@ import type {
   DirectoryFavorite,
   FileEntryView,
   FileMetadata,
+  HistoryClearResult,
   ListingHandle,
+  PathResolution,
+  PathSource,
   Preferences,
   PreviewOpenResult,
   PreviewReadResult,
@@ -26,7 +30,10 @@ import type {
   FavoriteDeleteResult,
   RenameGroupResult,
   ReusableCredential,
-  TransferView
+  SshKeyListing,
+  SshKeyValidation,
+  TransferView,
+  WorkspaceLayout
 } from "./types";
 
 export class IpcError extends Error {
@@ -62,6 +69,11 @@ export const ipc = {
   deleteProfile: (id: string) => call<{ deleted: boolean }>("connections_delete", { id }),
   connect: (profileId: string, secret?: string) =>
     call<ConnectionView>("connections_connect", { profileId, secret }),
+  trustHostKey: (profileId: string, fingerprint: string) =>
+    call<{ trusted: boolean; fingerprint: string }>("connections_trust_host_key", {
+      profileId,
+      fingerprint
+    }),
   reconnect: (connectionId: string, secret?: string) =>
     call<ConnectionView>("connections_reconnect", { connectionId, secret }),
   disconnect: (connectionId: string) =>
@@ -96,6 +108,18 @@ export const ipc = {
     }),
   chmod: (connectionId: string, path: string, mode: number) =>
     call<FileEntryView>("browser_chmod", { connectionId, path, mode }),
+  resolvePath: (source: PathSource, path: string, connectionId?: string) =>
+    call<PathResolution>("browser_resolve_path", { source, path, connectionId }),
+
+  workspaceGet: () => call<WorkspaceLayout>("workspace_get"),
+  workspaceSet: (layout: WorkspaceLayout) =>
+    call<WorkspaceLayout>("workspace_set", { layout }),
+  connectionHistoryList: () => call<ConnectionHistoryEntry[]>("connection_history_list"),
+  connectionHistoryClear: (confirmed: boolean) =>
+    call<HistoryClearResult>("connection_history_clear", { confirmed }),
+  sshKeysList: () => call<SshKeyListing>("ssh_keys_list"),
+  sshKeysValidate: (path: string) =>
+    call<SshKeyValidation>("ssh_keys_validate", { path }),
 
   previewOpen: (
     source: BrowserSource,
@@ -238,6 +262,7 @@ export const ipc = {
 export type {
   BrowsingSession,
   BrowserSource,
+  ConnectionHistoryEntry,
   ConnectionProfile,
   ConnectionTestResult,
   ConnectionView,
@@ -247,7 +272,10 @@ export type {
   DirectoryFavorite,
   FileEntryView,
   FileMetadata,
+  HistoryClearResult,
   ListingHandle,
+  PathResolution,
+  PathSource,
   Preferences,
   PreviewOpenResult,
   PreviewReadResult,
@@ -262,5 +290,8 @@ export type {
   ActiveProfileResult,
   CredentialRemoveResult,
   FavoriteDeleteResult,
-  RenameGroupResult
+  RenameGroupResult,
+  SshKeyListing,
+  SshKeyValidation,
+  WorkspaceLayout
 };

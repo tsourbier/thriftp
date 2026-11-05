@@ -56,6 +56,14 @@ Metadata and transfers are written through `MetadataStore` and `TransferStore`.
 The JSON adapter checks a schema version, rejects unsupported versions, and uses
 an atomic write (temporary file + rename). Secrets are never stored in JSON.
 
+## Dependency governance
+
+Dependency changes are recorded in `specs/005-dependency-upgrade/inventory.json`,
+verified through `evidence.json`, and validated by
+`scripts/validate-dependency-records.py`. CI actions are pinned to verified
+commit SHAs. Time-bound exceptions live in `exceptions.json` and remain visible
+to reviewers.
+
 ## Security invariants
 
 - Secrets live only in zeroizing memory or the native credential store.
@@ -63,3 +71,11 @@ an atomic write (temporary file + rename). Secrets are never stored in JSON.
 - TLS certificates and SSH host keys are verified by default.
 - Plain FTP requires an explicit warning and confirmation.
 - Remote deletes require explicit confirmation; local deletes use the OS trash.
+
+## Workspace state
+
+Workspace layout, connection history, and optional favorite working paths are
+non-secret metadata in the versioned JSON document (schema version 2). They are
+owned by `thriftp-core` services, mapped by thin Tauri commands, and projected by
+the Svelte workspace components. No new runtime service, database, or secret
+store is introduced.

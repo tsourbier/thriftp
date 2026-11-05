@@ -3,7 +3,6 @@ use std::process::{Child, Command, Stdio};
 
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
-use rand_core::OsRng;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use thriftp_core::automation::{AutomationStore, base64_encode, fingerprint};
@@ -50,7 +49,7 @@ impl Drop for Mcp {
 fn enrollment_grant_and_authenticated_tool_call() {
     let home = TempDir::new().unwrap();
     let scope = TempDir::new().unwrap();
-    let signing = SigningKey::generate(&mut OsRng);
+    let signing = SigningKey::generate(&mut rand::rng());
     let public_key = base64_encode(signing.verifying_key().as_bytes());
     let fingerprint = fingerprint(&public_key).unwrap();
 

@@ -1,5 +1,13 @@
 # Compatibility
 
+## Minimum versions
+
+- Rust: workspace MSRV 1.90.0; pinned toolchain 1.99.1
+- Node.js: 26.13.0 LTS
+- Tauri: 2.12.5
+- Supported desktop platforms: macOS, Linux, and Windows
+- CI runner images: Ubuntu 24.04, macOS 15, Windows 2025
+
 ## CLI
 
 The CLI contract version is `1.0.0`. The JSON envelope has `schemaVersion: 1`. Additive fields are backward compatible; removing fields or changing their meaning requires a major contract version.

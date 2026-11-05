@@ -2,7 +2,7 @@ import type { FileEntryView, SortKey } from "../ipc/types";
 
 export function sortEntries(entries: FileEntryView[], key: SortKey): FileEntryView[] {
   return [...entries].sort((left, right) => {
-    let comparison = 0;
+    let comparison: number;
     switch (key) {
       case "size":
         comparison = (left.size ?? 0) - (right.size ?? 0);

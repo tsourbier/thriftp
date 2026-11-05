@@ -47,3 +47,12 @@ The implemented layout intentionally keeps the new services cohesive rather than
 - Shared IPC types remain in `apps/desktop/src/lib/ipc/types.ts`, with the favorites API/store modules layered on top.
 
 This is a recorded deviation from the file-by-file layout in `plan.md`; behavior, ownership boundaries, and the Tauri-independent core remain unchanged.
+
+## Local and remote working paths
+
+Server favorites may store optional absolute `localPath` and `remotePath`
+values. Saving from an active session pre-fills the current pane paths.
+Reconnecting restores both; an unavailable path falls back to the nearest
+accessible ancestor and then to home or the server login folder with a single
+non-blocking notice. Paths are non-secret and never alter credentials or an
+active connection.

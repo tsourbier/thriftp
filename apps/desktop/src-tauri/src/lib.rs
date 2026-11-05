@@ -66,6 +66,8 @@ impl AppState {
             tabs,
             server_favorites: existing.server_favorites,
             favorite_preferences: existing.favorite_preferences,
+            workspace_layout: existing.workspace_layout,
+            connection_history: existing.connection_history,
         };
         self.metadata_store.save(&state)
     }
@@ -194,6 +196,7 @@ pub fn run() {
             commands::connections::connections_get_profile,
             commands::connections::connections_delete,
             commands::connections::connections_connect,
+            commands::connections::connections_trust_host_key,
             commands::connections::connections_reconnect,
             commands::connections::connections_disconnect,
             commands::connections::connections_test,
@@ -206,6 +209,13 @@ pub fn run() {
             commands::browser::browser_rename,
             commands::browser::browser_delete,
             commands::browser::browser_chmod,
+            commands::browser::browser_resolve_path,
+            commands::workspace::workspace_get,
+            commands::workspace::workspace_set,
+            commands::history::connection_history_list,
+            commands::history::connection_history_clear,
+            commands::ssh_keys::ssh_keys_list,
+            commands::ssh_keys::ssh_keys_validate,
             commands::previews::preview_open,
             commands::previews::preview_read,
             commands::previews::preview_close,

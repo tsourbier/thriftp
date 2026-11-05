@@ -17,6 +17,9 @@
   trust store. Certificate failures are reported as `certificate_invalid`.
 - SFTP verifies server host keys through `known_hosts`. Unknown and changed keys
   are separate errors; changed keys may indicate interception.
+- An unknown or changed key can be trusted only through an explicit prompt that
+  displays the SHA-256 fingerprint. The decision is stored in the user trust
+  store and replacing an existing trusted key requires extra acknowledgement.
 - Plain FTP is unencrypted. The UI shows a warning and requires explicit
   confirmation before connecting.
 
@@ -43,6 +46,11 @@
   assert this.
 - `Cargo.lock` and `package-lock.json` are committed; CI uses `--locked` and
   `npm ci`.
-- Dependencies are audited with `cargo audit`; CI generates a CycloneDX SBOM and
-  runs a license inventory.
+- Dependencies are audited with `cargo audit` and `scripts/check-dependency-policy.sh`;
+  CI generates a CycloneDX SBOM and runs a license inventory.
+- Dependency inventory, verification evidence, and time-bound exceptions live
+  under `specs/005-dependency-upgrade/` and are validated by
+  `scripts/validate-dependency-records.py` before release.
+- CI actions are pinned to verified commit SHAs; no floating major tags are
+  allowed.
 - CI builds the workspace twice with remapped paths and compares artifact hashes.

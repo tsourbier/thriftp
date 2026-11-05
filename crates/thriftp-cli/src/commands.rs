@@ -262,46 +262,6 @@ fn credential_service() -> CredentialService {
     CredentialService::new(Box::new(KeyringCredentialStore::new()))
 }
 
-fn known_hosts_path() -> PathBuf {
-    thriftp_core::automation::data_dir().join("known_hosts.json")
-}
-
-fn load_known_hosts() -> std::collections::BTreeMap<String, String> {
-    std::fs::read(known_hosts_path())
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default()
-}
-
-fn save_known_hosts(known_hosts: &std::collections::BTreeMap<String, String>) -> CoreResult<()> {
-    let path = known_hosts_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| CoreError::internal(format!("known-hosts directory: {error}")))?;
-    }
-    let bytes = serde_json::to_vec_pretty(known_hosts)
-        .map_err(|error| CoreError::internal(format!("known-hosts serialization: {error}")))?;
-    std::fs::write(&path, bytes)
-        .map_err(|error| CoreError::internal(format!("known-hosts write: {error}")))
-}
-
-fn validate_host_key_fingerprint(fingerprint: &str) -> CoreResult<()> {
-    let value = fingerprint
-        .strip_prefix("SHA256:")
-        .unwrap_or(fingerprint)
-        .trim();
-    if value.len() < 32
-        || !value.chars().all(|character| {
-            character.is_ascii_alphanumeric() || character == '+' || character == '/'
-        })
-    {
-        return Err(CoreError::validation(
-            "fingerprint must be a SHA-256 fingerprint",
-        ));
-    }
-    Ok(())
-}
-
 fn stored_secret(profile: &ConnectionProfile) -> CoreResult<Option<Secret>> {
     let reference = CredentialRef::for_profile(profile);
     match credential_service().get(&reference) {
@@ -529,16 +489,15 @@ async fn profiles(command: ProfileCommand) -> CoreResult<Value> {
                 ));
             }
             let profile = resolve_profile(&state, &id)?;
-            validate_host_key_fingerprint(&fingerprint)?;
-            let mut known_hosts = load_known_hosts();
-            known_hosts.insert(
-                format!("{}:{}", profile.host, profile.port),
-                thriftp_protocols::normalize_fingerprint(&fingerprint),
-            );
-            save_known_hosts(&known_hosts)?;
+            thriftp_protocols::trust_fingerprint(
+                &thriftp_protocols::known_hosts_store_path(),
+                &profile.host,
+                profile.port,
+                &fingerprint,
+            )?;
             Ok(json!({
                 "profileId": profile.id,
-                "trustedFingerprint": fingerprint,
+                "trustedFingerprint": thriftp_protocols::normalize_fingerprint(&fingerprint),
                 "warnings": plain_ftp_warnings(&profile),
             }))
         }
@@ -549,14 +508,11 @@ async fn profiles(command: ProfileCommand) -> CoreResult<Value> {
                 ));
             }
             let profile = resolve_profile(&state, &id)?;
-            let mut known_hosts = load_known_hosts();
-            if known_hosts
-                .remove(&format!("{}:{}", profile.host, profile.port))
-                .is_none()
-            {
-                return Err(CoreError::NotFound("trusted host key".to_owned()));
-            }
-            save_known_hosts(&known_hosts)?;
+            thriftp_protocols::forget_fingerprint(
+                &thriftp_protocols::known_hosts_store_path(),
+                &profile.host,
+                profile.port,
+            )?;
             Ok(json!({"profileId": profile.id, "forgotten": true}))
         }
     }

@@ -14,6 +14,9 @@ pub struct DesktopError {
     pub field: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retryable: Option<bool>,
+    /// SHA-256 fingerprint presented by the server for host-key failures.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fingerprint: Option<String>,
 }
 
 impl DesktopError {
@@ -24,6 +27,7 @@ impl DesktopError {
             message: message.into(),
             field: None,
             retryable: None,
+            fingerprint: None,
         }
     }
 
@@ -46,11 +50,11 @@ impl DesktopError {
             CoreError::CertificateInvalid(_) => {
                 "The server certificate could not be verified.".to_owned()
             }
-            CoreError::HostKeyUnknown(_) => {
+            CoreError::HostKeyUnknown { .. } => {
                 "The server host key is not trusted. Verify its fingerprint before continuing."
                     .to_owned()
             }
-            CoreError::HostKeyChanged(_) => {
+            CoreError::HostKeyChanged { .. } => {
                 "The server host key has changed. This may indicate interception.".to_owned()
             }
             CoreError::Network(_) => "The server could not be reached.".to_owned(),
@@ -82,6 +86,7 @@ impl DesktopError {
             message,
             field: error.field(),
             retryable: Some(error.retryable()),
+            fingerprint: error.host_key_fingerprint().map(str::to_owned),
         }
     }
 }
@@ -106,6 +111,16 @@ mod tests {
     }
 
     #[test]
+    fn exposes_host_key_fingerprint() {
+        let error = DesktopError::from(CoreError::HostKeyUnknown {
+            fingerprint: "abc123".to_owned(),
+            detail: "unknown key".to_owned(),
+        });
+        assert_eq!(error.code, "host_key_unknown");
+        assert_eq!(error.fingerprint.as_deref(), Some("abc123"));
+    }
+
+    #[test]
     fn keeps_distinct_recovery_codes() {
         assert_eq!(
             DesktopError::from(CoreError::CredentialMissing).code,
@@ -116,7 +131,11 @@ mod tests {
             "credential_rejected"
         );
         assert_eq!(
-            DesktopError::from(CoreError::HostKeyChanged("line".to_owned())).code,
+            DesktopError::from(CoreError::HostKeyChanged {
+                fingerprint: "abc".to_owned(),
+                detail: "line".to_owned(),
+            })
+            .code,
             "host_key_changed"
         );
         assert_eq!(

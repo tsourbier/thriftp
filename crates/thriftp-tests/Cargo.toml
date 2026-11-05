@@ -48,6 +48,10 @@ name = "security_panic_safety"
 path = "tests/security/test_panic_safety.rs"
 
 [[test]]
+name = "security_workspace_privacy"
+path = "tests/security/test_workspace_privacy.rs"
+
+[[test]]
 name = "integration_large_listing"
 path = "tests/integration/test_large_listing.rs"
 

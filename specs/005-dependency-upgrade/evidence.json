@@ -1,0 +1,248 @@
+[
+  {
+    "id": "E-001",
+    "batchId": "batch-1-baseline",
+    "kind": "test",
+    "command": "cargo test --workspace --locked",
+    "environment": "macOS 26 arm64, Rust 1.99.1.0",
+    "result": "pass",
+    "summary": "All workspace tests passed with zero failures before the upgrade.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-002",
+    "batchId": "batch-1-baseline",
+    "kind": "test",
+    "command": "npm test",
+    "environment": "macOS 26 arm64, Node 22.23.0",
+    "result": "pass",
+    "summary": "29 test files and 110 tests passed before the upgrade.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-003",
+    "batchId": "batch-2-toolchain",
+    "kind": "build",
+    "command": "cargo check --workspace",
+    "environment": "macOS 26 arm64, Rust 1.99.1",
+    "result": "pass",
+    "summary": "Workspace resolved and compiled with the upgraded dependency set.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-004",
+    "batchId": "batch-2-toolchain",
+    "kind": "build",
+    "command": "cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "environment": "macOS 26 arm64, Tauri 2.12.5",
+    "result": "pass",
+    "summary": "Desktop shell compiled with the upgraded Tauri stack.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-005",
+    "batchId": "batch-3-rust",
+    "kind": "test",
+    "command": "cargo test --workspace --locked",
+    "environment": "macOS 26 arm64, Rust 1.99.1",
+    "result": "pass",
+    "summary": "All Rust workspace tests passed after the dependency upgrade.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-006",
+    "batchId": "batch-3-rust",
+    "kind": "test",
+    "command": "cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --tests --locked",
+    "environment": "macOS 26 arm64, Tauri 2.12.5",
+    "result": "pass",
+    "summary": "All desktop shell contract and unit tests passed.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-007",
+    "batchId": "batch-4-frontend",
+    "kind": "test",
+    "command": "npm test",
+    "environment": "macOS 26 arm64, Vite 8.3.6, Vitest 5.1.0",
+    "result": "pass",
+    "summary": "29 test files and 110 tests passed with the upgraded frontend toolchain.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-008",
+    "batchId": "batch-4-frontend",
+    "kind": "build",
+    "command": "npm run build",
+    "environment": "macOS 26 arm64, Vite 8.3.6",
+    "result": "pass",
+    "summary": "Production frontend build completed successfully.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-009",
+    "batchId": "batch-4-frontend",
+    "kind": "test",
+    "command": "npm run lint && npm run format",
+    "environment": "macOS 26 arm64, ESLint 10.14.0, Prettier 3.9.10",
+    "result": "pass",
+    "summary": "Lint and formatting checks passed with zero errors.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-010",
+    "batchId": "batch-3-rust",
+    "kind": "test",
+    "command": "cargo clippy --workspace --all-targets -- -D warnings",
+    "environment": "macOS 26 arm64, Rust 1.99.1",
+    "result": "pass",
+    "summary": "Clippy passed with warnings denied.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-011",
+    "batchId": "batch-3-rust",
+    "kind": "test",
+    "command": "cargo fmt --all -- --check",
+    "environment": "macOS 26 arm64, Rust 1.99.1",
+    "result": "pass",
+    "summary": "Formatting check passed.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-012",
+    "batchId": "batch-3-rust",
+    "kind": "build",
+    "command": "RUSTDOCFLAGS=-D warnings cargo doc --workspace --no-deps --locked",
+    "environment": "macOS 26 arm64, Rust 1.99.1",
+    "result": "pass",
+    "summary": "Documentation built with warnings denied.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-013",
+    "batchId": "batch-3-rust",
+    "kind": "test",
+    "command": "cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "environment": "macOS 26 arm64, Tauri 2.12.5",
+    "result": "pass",
+    "summary": "Desktop clippy passed with warnings denied.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-014",
+    "batchId": "batch-6-evidence",
+    "kind": "test",
+    "command": "cargo test -p thriftp-tests --test security_secret_redaction --test security_security_parity --test security_panic_safety",
+    "environment": "macOS 26 arm64",
+    "result": "pass",
+    "summary": "Security regression suites passed.",
+    "capturedAt": "2026-11-05T22:10:00Z"
+  },
+  {
+    "id": "E-015",
+    "batchId": "batch-6-evidence",
+    "kind": "audit",
+    "command": "npm audit --audit-level=high",
+    "environment": "macOS 26 arm64, npm 10.9.8",
+    "result": "warning",
+    "summary": "Initial 16 npm package advisories reduced to 2 low-severity deepmerge instances, covered by EX-002; minimatch advisories resolved by the approved override. cargo audit reports one medium RSA timing advisory (EX-004) and three unmaintained zbus warnings (EX-006); no critical or high advisory remains.",
+    "capturedAt": "2026-11-05T22:12:00Z",
+    "artifact": "specs/005-dependency-upgrade/exceptions.md"
+  },
+  {
+    "id": "E-016",
+    "batchId": "batch-6-evidence",
+    "kind": "security-review",
+    "command": "python3 scripts/validate-dependency-records.py specs/005-dependency-upgrade --release",
+    "environment": "macOS 26 arm64, Python 3",
+    "result": "pass",
+    "summary": "Inventory contains no new dependency source, fork, alternate registry, patched package, mandatory telemetry, account, cloud call, or plaintext secret path.",
+    "capturedAt": "2026-11-05T22:12:00Z",
+    "artifact": "specs/005-dependency-upgrade/security-review.md"
+  },
+  {
+    "id": "E-017",
+    "batchId": "batch-6-evidence",
+    "kind": "test",
+    "command": "python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
+    "environment": "macOS 26 arm64, Python 3",
+    "result": "pass",
+    "summary": "Dependency-record and resolution-policy tests passed (13 tests).",
+    "capturedAt": "2026-11-05T22:12:00Z"
+  },
+  {
+    "id": "E-018",
+    "batchId": "batch-6-evidence",
+    "kind": "reproducibility",
+    "command": "scripts/verify-reproducible-build.sh",
+    "environment": "macOS 26 arm64, Rust 1.99.1",
+    "result": "pass",
+    "summary": "Two clean release builds produced identical final binaries and SBOM.",
+    "capturedAt": "2026-11-05T22:20:00Z"
+  },
+  {
+    "id": "E-019",
+    "batchId": "batch-2-toolchain",
+    "kind": "test",
+    "command": "scripts/test-integration.sh",
+    "environment": "macOS 26 arm64, Docker, Alpine 3.23, Debian 13-slim",
+    "result": "pass",
+    "summary": "FTP, explicit FTPS, implicit FTPS, and SFTP protocol integration tests passed with rebuilt containers.",
+    "capturedAt": "2026-11-05T22:14:00Z"
+  },
+  {
+    "id": "E-020",
+    "batchId": "batch-6-evidence",
+    "kind": "build",
+    "command": "scripts/verify-clean-install.sh",
+    "environment": "macOS 26 arm64, Rust 1.99.1, Node 22.23.0 (engine target 26.13.0)",
+    "result": "pass",
+    "summary": "Clean install, Rust tests, frontend lint/format/tests, and production build passed on macOS.",
+    "capturedAt": "2026-11-05T22:11:00Z"
+  },
+  {
+    "id": "E-021",
+    "batchId": "batch-6-evidence",
+    "kind": "sbom",
+    "command": "PATH=\"$HOME/.cargo/bin:$PATH\" scripts/generate-sbom.sh target/sbom.json",
+    "environment": "macOS 26 arm64, cargo-cyclonedx 0.5.9, npm 10.9.8",
+    "result": "pass",
+    "summary": "CycloneDX 1.5 Rust SBOM (222 components) and npm SBOM (214 components) generated.",
+    "capturedAt": "2026-11-05T22:30:00Z",
+    "artifact": "target/sbom.json"
+  },
+  {
+    "id": "E-022",
+    "batchId": "batch-6-evidence",
+    "kind": "license",
+    "command": "PATH=\"$HOME/.cargo/bin:$PATH\" scripts/check-licenses.sh",
+    "environment": "macOS 26 arm64, cargo-license 0.7.0",
+    "result": "pass",
+    "summary": "302 runtime packages checked; all licenses allowed.",
+    "capturedAt": "2026-11-05T22:30:00Z",
+    "artifact": "target/licenses.json"
+  },
+  {
+    "id": "E-023",
+    "batchId": "batch-6-evidence",
+    "kind": "audit",
+    "command": "python3 scripts/validate-dependency-records.py specs/005-dependency-upgrade --release",
+    "environment": "macOS 26 arm64, Python 3",
+    "result": "pass",
+    "summary": "Complete inventory records 884 items (55 curated + 829 transitive) and validates against the schemas.",
+    "capturedAt": "2026-11-05T22:30:00Z",
+    "artifact": "specs/005-dependency-upgrade/inventory.json"
+  },
+  {
+    "id": "E-024",
+    "batchId": "batch-6-evidence",
+    "kind": "audit",
+    "command": "gh api repos/tsourbier/thriftp/dependabot/alerts?state=open and gh api repos/tsourbier/thriftp/vulnerability-alerts",
+    "environment": "GitHub API, default branch master",
+    "result": "warning",
+    "summary": "Vulnerability alerts and automated security fixes are enabled (paused: false). The default branch still reports 65 open Dependabot alerts (3 critical, 12 high, 39 medium, 11 low) because the upgrade is uncommitted/not merged; re-check the dashboard after merge to prove the >=90% target.",
+    "capturedAt": "2026-11-05T22:32:00Z",
+    "artifact": "specs/005-dependency-upgrade/validation.md"
+  }
+]

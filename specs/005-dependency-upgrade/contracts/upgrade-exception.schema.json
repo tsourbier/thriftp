@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thriftp.dev/schemas/upgrade-exception.schema.json",
+  "title": "Upgrade Exception",
+  "description": "An approved, time-bound deviation from the latest-stable policy or the zero-advisory target.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "component",
+    "currentVersion",
+    "reason",
+    "description",
+    "risk",
+    "mitigation",
+    "owner",
+    "approvedBy",
+    "createdAt",
+    "expiresAt",
+    "reviewDate",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^EX-[0-9]{3,}$"
+    },
+    "component": {
+      "type": "string",
+      "minLength": 1
+    },
+    "currentVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "latestStableVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "no-stable-release",
+        "peer-conflict",
+        "platform-requirement",
+        "no-fixed-release",
+        "replacement-risk",
+        "other"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "risk": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mitigation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "approvedBy": {
+      "type": "string",
+      "minLength": 1
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date"
+    },
+    "reviewDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "approved", "expired", "closed"]
+    },
+    "securityReview": {
+      "type": "string",
+      "description": "Path or reference to required security review evidence for security-sensitive exceptions."
+    },
+    "advisoryIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "peerConstraint": {
+      "type": "string",
+      "description": "The incompatible peer and supported range, required for peer-conflict exceptions."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "reason": { "const": "peer-conflict" }
+        },
+        "required": ["reason"]
+      },
+      "then": {
+        "required": ["peerConstraint"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "reason": { "const": "no-fixed-release" }
+        },
+        "required": ["reason"]
+      },
+      "then": {
+        "required": ["advisoryIds"]
+      }
+    }
+  ],
+  "$comment": "Date ordering (expiresAt after createdAt, reviewDate not after expiresAt) and separation of proposer and approver for security exceptions are review rules not expressible in JSON Schema."
+}

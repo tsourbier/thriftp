@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CoreResult;
 use crate::model::{
-    BrowsingSession, ConnectionProfile, CredentialRef, DirectoryFavorite, FavoritePreferences,
-    PartialTransferData, Preference, ServerFavorite, Transfer, TransferHistory, TransferQueue,
+    BrowsingSession, ConnectionHistoryEntry, ConnectionProfile, CredentialRef, DirectoryFavorite,
+    FavoritePreferences, PartialTransferData, Preference, ServerFavorite, Transfer,
+    TransferHistory, TransferQueue, WorkspaceLayout,
 };
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -20,6 +21,10 @@ pub struct AppState {
     pub server_favorites: Vec<ServerFavorite>,
     #[serde(default)]
     pub favorite_preferences: FavoritePreferences,
+    #[serde(default)]
+    pub workspace_layout: WorkspaceLayout,
+    #[serde(default)]
+    pub connection_history: Vec<ConnectionHistoryEntry>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

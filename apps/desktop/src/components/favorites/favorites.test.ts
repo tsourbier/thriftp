@@ -2,9 +2,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import TabBar from "../tabs/TabBar.svelte";
-import FavoritesSidebar from "./FavoritesSidebar.svelte";
 import SaveDirectoryFavoriteDialog from "./SaveDirectoryFavoriteDialog.svelte";
-import type { BrowsingSession, DirectoryFavorite } from "../../lib/ipc/types";
+import type { BrowsingSession } from "../../lib/ipc/types";
 
 afterEach(cleanup);
 
@@ -23,18 +22,6 @@ function tab(
     selectedItems: [],
     createdAt: new Date().toISOString(),
     restored: false
-  };
-}
-
-function favorite(id: string, label: string, path: string): DirectoryFavorite {
-  return {
-    id,
-    connectionProfileId: "profile-1",
-    path,
-    label,
-    sortOrder: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
   };
 }
 
@@ -76,47 +63,6 @@ describe("TabBar", () => {
       }
     });
     expect(screen.getByText("disconnected")).toBeTruthy();
-  });
-});
-
-describe("FavoritesSidebar", () => {
-  const favorites = [favorite("1", "Home", "/home"), favorite("2", "Logs", "/var/log")];
-
-  it("opens and deletes favorites", async () => {
-    const onopen = vi.fn();
-    const ondelete = vi.fn();
-    render(FavoritesSidebar, {
-      props: {
-        favorites,
-        canSave: true,
-        onopen,
-        onsave: vi.fn(),
-        ondelete
-      }
-    });
-
-    await fireEvent.click(screen.getByText("Home"));
-    expect(onopen).toHaveBeenCalledWith(favorites[0]);
-
-    await fireEvent.click(screen.getByRole("button", { name: "Delete Logs" }));
-    expect(ondelete).toHaveBeenCalledWith(favorites[1]);
-  });
-
-  it("disables save when no directory is available", () => {
-    render(FavoritesSidebar, {
-      props: {
-        favorites: [],
-        canSave: false,
-        onopen: vi.fn(),
-        onsave: vi.fn(),
-        ondelete: vi.fn()
-      }
-    });
-    const save = screen.getByRole("button", {
-      name: "Save current"
-    }) as HTMLButtonElement;
-    expect(save.disabled).toBe(true);
-    expect(screen.getByText(/No favorite directories/)).toBeTruthy();
   });
 });
 

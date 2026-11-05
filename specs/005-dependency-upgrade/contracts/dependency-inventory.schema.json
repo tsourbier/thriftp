@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://thriftp.dev/schemas/dependency-inventory.schema.json",
+  "title": "Dependency Inventory Item",
+  "description": "One third-party library, runtime component, build or test tool, automation action, or container image used by the project.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "category",
+    "scope",
+    "relationship",
+    "currentVersion",
+    "targetVersion",
+    "latestStableVersion",
+    "updateType",
+    "source",
+    "reason",
+    "license",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._/-]*$",
+      "description": "Stable identifier such as rust/russh or npm/vite."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "category": {
+      "type": "string",
+      "enum": ["runtime", "library", "frontend", "build-tool", "test-tool", "automation", "container"]
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["runtime", "development", "build", "test", "release"]
+    },
+    "relationship": {
+      "type": "string",
+      "enum": ["direct", "transitive"]
+    },
+    "currentVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "targetVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "latestStableVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "updateType": {
+      "type": "string",
+      "enum": ["patch", "minor", "major", "replacement", "removal"]
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Official registry, repository, action, or image reference."
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "migrationNotes": {
+      "type": "string"
+    },
+    "breakingChanges": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1
+    },
+    "advisoryIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "exceptionId": {
+      "type": "string",
+      "pattern": "^EX-[0-9]{3,}$"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "in-progress", "verified", "deferred", "removed"]
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "updateType": { "enum": ["major", "replacement", "removal"] }
+        },
+        "required": ["updateType"]
+      },
+      "then": {
+        "required": ["migrationNotes"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": { "const": "verified" }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "evidence": { "minItems": 1 }
+        },
+        "required": ["evidence"]
+      }
+    }
+  ],
+  "$comment": "Review rule not expressible in JSON Schema: when a direct item's targetVersion differs from latestStableVersion, exceptionId is required. When an item has an open critical or high advisory, status must not be verified."
+}

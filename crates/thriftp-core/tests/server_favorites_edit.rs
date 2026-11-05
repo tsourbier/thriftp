@@ -20,6 +20,8 @@ fn input(name: &str) -> ServerFavoriteInput {
         timeout_seconds: 30,
         ssh_key_ref: None,
         pinned: false,
+        local_path: None,
+        remote_path: None,
     }
 }
 

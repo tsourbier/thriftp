@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import type { Snippet } from "svelte";
   import DirectoryList from "./DirectoryList.svelte";
   import BrowserToolbar from "./BrowserToolbar.svelte";
   import ConflictDialog from "../transfers/ConflictDialog.svelte";
@@ -9,6 +10,7 @@
   import { openListing, releaseListing } from "../../lib/browser/listings";
   import { handleBrowserKey } from "../../lib/keyboard/browser";
   import { visibleEntries } from "../../lib/browser/view";
+  import { applySplitKey, clampSplit } from "../../lib/workspace/layout";
   import type {
     BrowserSource,
     ConflictPolicy,
@@ -44,6 +46,10 @@
     remoteSelectedItems = [],
     defaultShowHidden = false,
     defaultSortKey = "name",
+    splitRatio = $bindable(0.5),
+    onsplitcommit,
+    remoteFallback,
+    refreshSignal = 0,
     onpreview,
     oninspect,
     ontransferstarted,
@@ -60,6 +66,10 @@
     remoteSelectedItems?: string[];
     defaultShowHidden?: boolean;
     defaultSortKey?: SortKey;
+    splitRatio?: number;
+    onsplitcommit?: (ratio: number) => void;
+    remoteFallback?: Snippet;
+    refreshSignal?: number;
     onpreview?: (entry: FileEntryView, source: BrowserSource) => void;
     oninspect?: (entry: FileEntryView, source: BrowserSource) => void;
     ontransferstarted?: () => void;
@@ -521,12 +531,74 @@
       filter: remote.filter
     });
   });
+
+  let splitContainer = $state<HTMLElement | null>(null);
+  let dragging = $state(false);
+
+  $effect(() => {
+    const signal = refreshSignal;
+    if (signal === 0) {
+      return;
+    }
+    untrack(() => {
+      if (activePane === "local") {
+        void load(local);
+      } else if (connectionId) {
+        void load(remote);
+      }
+    });
+  });
+
+  const splitStyle = $derived(
+    `grid-template-columns: minmax(320px, ${splitRatio}fr) 6px minmax(320px, ${1 - splitRatio}fr)`
+  );
+
+  function updateSplit(next: number, commit = false) {
+    splitRatio = clampSplit(next);
+    if (commit) {
+      onsplitcommit?.(splitRatio);
+    }
+  }
+
+  function startDrag(event: PointerEvent) {
+    dragging = true;
+    (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+  }
+
+  function drag(event: PointerEvent) {
+    if (!dragging || !splitContainer) {
+      return;
+    }
+    const rect = splitContainer.getBoundingClientRect();
+    updateSplit((event.clientX - rect.left) / rect.width);
+  }
+
+  function endDrag() {
+    if (!dragging) {
+      return;
+    }
+    dragging = false;
+    onsplitcommit?.(splitRatio);
+  }
+
+  function splitKeydown(event: KeyboardEvent) {
+    const next = applySplitKey(splitRatio, event.key);
+    if (next !== splitRatio) {
+      event.preventDefault();
+      updateSplit(next, true);
+    }
+  }
 </script>
 
 <section
   class="dual-pane"
   class:remote-active={activePane === "remote"}
   aria-label="Dual-pane file browser"
+  bind:this={splitContainer}
+  style={splitStyle}
+  onpointermove={drag}
+  onpointerup={endDrag}
+  onpointercancel={endDrag}
 >
   <section
     class="pane"
@@ -588,6 +660,21 @@
       />
     </div>
   </section>
+
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+  <div
+    class="splitter"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize file panes"
+    aria-valuemin="20"
+    aria-valuemax="80"
+    aria-valuenow={Math.round(splitRatio * 100)}
+    tabindex="0"
+    onpointerdown={startDrag}
+    onkeydown={splitKeydown}
+    title="Drag to resize; use arrow keys, Home, End, or Enter to reset"
+  ></div>
 
   <section
     class="pane"
@@ -663,6 +750,8 @@
           onopen={(entry) => openEntry(remote, entry)}
         />
       </div>
+    {:else if remoteFallback}
+      {@render remoteFallback()}
     {:else}
       <p class="empty">Connect to a server to browse remote files.</p>
     {/if}
@@ -720,14 +809,22 @@
   }
   .dual-pane {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1px;
+    gap: 0;
     flex: 1;
-    background: #d0d0d0;
+    background: var(--border);
     min-height: 0;
   }
+  .splitter {
+    cursor: col-resize;
+    background: var(--border);
+    touch-action: none;
+  }
+  .splitter:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
   .pane {
-    background: Canvas;
+    background: var(--surface);
     padding: 0.75rem;
     min-width: 0;
     display: flex;
@@ -760,7 +857,7 @@
     min-height: 0;
   }
   .pane-error {
-    color: #8a0000;
+    color: var(--danger-text);
     font-size: 0.8rem;
   }
   .empty {

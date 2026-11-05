@@ -123,6 +123,7 @@ DesktopError = {
   message: string
   field?: string
   retryable?: boolean
+  fingerprint?: string
 }
 ```
 
@@ -135,6 +136,7 @@ DesktopError = {
 | `connections_update` | `{ id, profile, secret?, secretKind? }` | `ConnectionProfileView` | Identity changes invalidate credential reuse |
 | `connections_delete` | `{ id }` | `{ deleted: true; credentialImpact?: CredentialImpact }` | Does not disconnect active connections |
 | `connections_connect` | `{ profileId, secret?, secretKind? }` | `ConnectionView` | Session-only secrets are not persisted |
+| `connections_trust_host_key` | `{ profileId, fingerprint }` | `{ trusted: true; fingerprint }` | Explicit SFTP host-key override; requires a reviewed fingerprint |
 | `connections_disconnect` | `{ connectionId }` | `{ disconnected: true }` | |
 | `connections_get_profile` | `{ connectionId }` | `{ profile, state }` | Supports save-as-favorite |
 | `connections_test` | `{ profile, secret?, secretKind? }` | `{ ok: boolean; error?: DesktopError }` | No persistence, no last-used update |

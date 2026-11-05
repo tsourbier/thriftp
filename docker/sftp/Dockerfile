@@ -1,6 +1,7 @@
-FROM debian:12-slim
+FROM debian:13-slim
 
 RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         netcat-openbsd openssh-server procps \
     && rm -rf /var/lib/apt/lists/* \

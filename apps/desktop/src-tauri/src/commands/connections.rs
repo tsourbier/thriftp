@@ -1,8 +1,13 @@
+use std::path::Path;
+
 use tauri::{AppHandle, Emitter, State};
 use thriftp_core::connections::ConnectionService;
 use thriftp_core::credentials::{CredentialService, Secret};
 use thriftp_core::error::{CoreError, CoreResult};
-use thriftp_core::model::{ActiveConnection, ConnectionProfile, CredentialPolicy, CredentialRef};
+use thriftp_core::history::ConnectionHistoryService;
+use thriftp_core::model::{
+    ActiveConnection, ConnectionProfile, CredentialPolicy, CredentialRef, Protocol,
+};
 use thriftp_core::server_favorites::ServerFavoriteInput;
 use uuid::Uuid;
 
@@ -10,7 +15,7 @@ use crate::AppState;
 use crate::error::DesktopError;
 use crate::views::{
     ActiveProfileView, ConnectionTestView, ConnectionView, CredentialsChangedEvent, DeletedView,
-    DisconnectedView, FavoritesChangedEvent,
+    DisconnectedView, FavoritesChangedEvent, TrustedHostKeyView,
 };
 
 fn parse_id(value: &str) -> CoreResult<Uuid> {
@@ -139,6 +144,22 @@ pub async fn test(
     service.test(profile_id, secret).await
 }
 
+/// Persist an explicit host-key trust decision for an SFTP profile.
+pub fn trust_host_key(
+    service: &ConnectionService,
+    profile_id: Uuid,
+    fingerprint: &str,
+    store_path: &Path,
+) -> CoreResult<()> {
+    let profile = service.get_profile(profile_id)?;
+    if profile.protocol != Protocol::Sftp {
+        return Err(CoreError::validation(
+            "host-key trust applies only to SFTP profiles",
+        ));
+    }
+    thriftp_protocols::trust_fingerprint(store_path, &profile.host, profile.port, fingerprint)
+}
+
 #[tauri::command]
 pub async fn connections_list(
     state: State<'_, AppState>,
@@ -201,7 +222,9 @@ pub async fn connections_update(
             CredentialPolicy::Ask
         };
         let profile_id = profile.id;
-        let input: ServerFavoriteInput = profile.into();
+        let mut input: ServerFavoriteInput = profile.into();
+        input.local_path = existing.local_path.clone();
+        input.remote_path = existing.remote_path.clone();
         state
             .server_favorites
             .update(
@@ -342,8 +365,41 @@ pub async fn connections_connect(
         .favorite_id_for_profile(profile_id)
         .map_err(DesktopError::from)?
         .map(|id| id.to_string());
+    let profile = {
+        let service = state.connections.lock().await;
+        service.get_profile(profile_id).map_err(DesktopError::from)?
+    };
+    ConnectionHistoryService::new(state.metadata_store.clone())
+        .record_profile(
+            &profile,
+            view.favorite_id
+                .as_deref()
+                .and_then(|id| Uuid::parse_str(id).ok()),
+        )
+        .map_err(DesktopError::from)?;
     let _ = app.emit("connection:state", view.clone());
     Ok(view)
+}
+
+#[tauri::command]
+pub async fn connections_trust_host_key(
+    state: State<'_, AppState>,
+    profile_id: String,
+    fingerprint: String,
+) -> Result<TrustedHostKeyView, DesktopError> {
+    let profile_id = parse_id(&profile_id).map_err(DesktopError::from)?;
+    let service = state.connections.lock().await;
+    trust_host_key(
+        &service,
+        profile_id,
+        &fingerprint,
+        &thriftp_protocols::known_hosts_store_path(),
+    )
+    .map_err(DesktopError::from)?;
+    Ok(TrustedHostKeyView {
+        trusted: true,
+        fingerprint: thriftp_protocols::normalize_fingerprint(&fingerprint),
+    })
 }
 
 #[tauri::command]
@@ -383,6 +439,18 @@ pub async fn connections_reconnect(
         .favorite_id_for_profile(profile_id)
         .map_err(DesktopError::from)?
         .map(|id| id.to_string());
+    let profile = {
+        let service = state.connections.lock().await;
+        service.get_profile(profile_id).map_err(DesktopError::from)?
+    };
+    ConnectionHistoryService::new(state.metadata_store.clone())
+        .record_profile(
+            &profile,
+            view.favorite_id
+                .as_deref()
+                .and_then(|id| Uuid::parse_str(id).ok()),
+        )
+        .map_err(DesktopError::from)?;
     let _ = app.emit("connection:state", view.clone());
     Ok(view)
 }

@@ -1,6 +1,7 @@
-FROM alpine:3.20
+FROM alpine:3.23
 
-RUN apk add --no-cache openssl procps shadow vsftpd \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl procps shadow vsftpd \
     && adduser -D -s /bin/sh tester \
     && echo 'tester:testpass' | chpasswd
 

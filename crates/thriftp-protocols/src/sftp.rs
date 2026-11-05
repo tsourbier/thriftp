@@ -1,4 +1,5 @@
-use std::io::SeekFrom;
+use std::collections::BTreeMap;
+use std::io::{SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -16,10 +17,10 @@ use thriftp_core::model::{
 };
 use thriftp_core::protocol::{ProgressCallback, RemoteFs, TRANSFER_CHUNK_SIZE};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum HostKeyStatus {
-    Unknown,
-    Changed,
+    Unknown { fingerprint: String },
+    Changed { fingerprint: String },
 }
 
 struct SshHandler {
@@ -35,31 +36,40 @@ impl client::Handler for SshHandler {
 
     async fn check_server_key(
         &mut self,
-        server_public_key: &PublicKey,
+        server_public_key: &russh::keys::PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
+        let server_public_key = server_public_key.public_key();
+        let fingerprint = key_fingerprint(&server_public_key);
         let expected = self.expected_fingerprint.as_deref();
         let result = match &self.known_hosts_path {
             Some(path) => {
-                known_hosts::check_known_hosts_path(&self.host, self.port, server_public_key, path)
+                known_hosts::check_known_hosts_path(&self.host, self.port, &server_public_key, path)
             }
-            None => known_hosts::check_known_hosts(&self.host, self.port, server_public_key),
+            None => known_hosts::check_known_hosts(&self.host, self.port, &server_public_key),
         };
         match result {
             Ok(true) => Ok(true),
             Ok(false) => {
                 if let Some(expected) = expected {
-                    if key_fingerprint(server_public_key) == expected {
+                    if fingerprint == expected {
                         return Ok(true);
                     }
                     *self.status.lock().expect("host-key status lock") =
-                        Some(HostKeyStatus::Changed);
+                        Some(HostKeyStatus::Changed { fingerprint });
                     return Ok(false);
                 }
-                *self.status.lock().expect("host-key status lock") = Some(HostKeyStatus::Unknown);
+                *self.status.lock().expect("host-key status lock") =
+                    Some(HostKeyStatus::Unknown { fingerprint });
                 Ok(false)
             }
             Err(russh::keys::Error::KeyChanged { line }) => {
-                *self.status.lock().expect("host-key status lock") = Some(HostKeyStatus::Changed);
+                if let Some(expected) = expected
+                    && fingerprint == expected
+                {
+                    return Ok(true);
+                }
+                *self.status.lock().expect("host-key status lock") =
+                    Some(HostKeyStatus::Changed { fingerprint });
                 Err(anyhow::anyhow!(
                     "known_hosts entry on line {line} does not match the server key"
                 ))
@@ -78,14 +88,56 @@ pub fn key_fingerprint(key: &PublicKey) -> String {
     )
 }
 
+/// Default path of the explicit host-key trust store shared by the desktop
+/// client and the CLI.
+#[must_use]
+pub fn known_hosts_store_path() -> PathBuf {
+    thriftp_core::automation::data_dir().join("known_hosts.json")
+}
+
 /// Load a user-trusted fingerprint for `host:port` from the CLI/desktop store.
 #[must_use]
 pub fn trusted_fingerprint(path: &Path, host: &str, port: u16) -> Option<String> {
-    let bytes = std::fs::read(path).ok()?;
-    let values: std::collections::BTreeMap<String, String> = serde_json::from_slice(&bytes).ok()?;
-    values
+    load_trust_store(path)
+        .ok()?
         .get(&format!("{host}:{port}"))
         .map(|value| normalize_fingerprint(value))
+}
+
+/// Validate and persist an explicit host-key trust decision.
+///
+/// The fingerprint is stored for `host:port` in the JSON trust store used by
+/// [`SftpAdapter`]. Writing is atomic and the file is private on Unix.
+pub fn trust_fingerprint(path: &Path, host: &str, port: u16, fingerprint: &str) -> CoreResult<()> {
+    validate_fingerprint(fingerprint)?;
+    let mut values = load_trust_store(path)?;
+    values.insert(format!("{host}:{port}"), normalize_fingerprint(fingerprint));
+    save_trust_store(path, &values)
+}
+
+/// Remove an explicit host-key trust decision for `host:port`.
+pub fn forget_fingerprint(path: &Path, host: &str, port: u16) -> CoreResult<()> {
+    let mut values = load_trust_store(path)?;
+    values
+        .remove(&format!("{host}:{port}"))
+        .map(|_| ())
+        .ok_or_else(|| CoreError::NotFound("trusted host key".to_owned()))?;
+    save_trust_store(path, &values)
+}
+
+/// Validate that a value looks like an OpenSSH SHA-256 fingerprint.
+pub fn validate_fingerprint(fingerprint: &str) -> CoreResult<()> {
+    let value = normalize_fingerprint(fingerprint);
+    if value.len() < 32
+        || !value.chars().all(|character| {
+            character.is_ascii_alphanumeric() || character == '+' || character == '/'
+        })
+    {
+        return Err(CoreError::validation(
+            "fingerprint must be a SHA-256 fingerprint",
+        ));
+    }
+    Ok(())
 }
 
 /// Normalize a SHA-256 fingerprint for comparison.
@@ -97,6 +149,42 @@ pub fn normalize_fingerprint(value: &str) -> String {
         .unwrap_or(value.trim())
         .trim_end_matches('=')
         .to_owned()
+}
+
+fn load_trust_store(path: &Path) -> CoreResult<BTreeMap<String, String>> {
+    if !path.is_file() {
+        return Ok(BTreeMap::new());
+    }
+    let bytes = std::fs::read(path)
+        .map_err(|error| CoreError::internal(format!("known-hosts read: {error}")))?;
+    serde_json::from_slice(&bytes)
+        .map_err(|error| CoreError::internal(format!("known-hosts parse: {error}")))
+}
+
+fn save_trust_store(path: &Path, values: &BTreeMap<String, String>) -> CoreResult<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| CoreError::internal(format!("known-hosts directory: {error}")))?;
+    }
+    let bytes = serde_json::to_vec_pretty(values)
+        .map_err(|error| CoreError::internal(format!("known-hosts serialization: {error}")))?;
+    let temporary = path.with_extension("tmp");
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(&temporary)
+        .map_err(|error| CoreError::internal(format!("known-hosts write: {error}")))?;
+    file.write_all(&bytes)
+        .map_err(|error| CoreError::internal(format!("known-hosts write: {error}")))?;
+    file.sync_all()
+        .map_err(|error| CoreError::internal(format!("known-hosts sync: {error}")))?;
+    std::fs::rename(&temporary, path)
+        .map_err(|error| CoreError::internal(format!("known-hosts replace: {error}")))
 }
 
 pub struct SftpAdapter {
@@ -124,7 +212,7 @@ impl SftpAdapter {
                 max_path_length: None,
             },
             known_hosts_path: None,
-            trust_store_path: Some(thriftp_core::automation::data_dir().join("known_hosts.json")),
+            trust_store_path: Some(known_hosts_store_path()),
         }
     }
 
@@ -525,13 +613,24 @@ fn map_io_error(error: std::io::Error) -> CoreError {
 }
 
 fn map_connect_error(error: anyhow::Error, status: &Mutex<Option<HostKeyStatus>>) -> CoreError {
+    let (fingerprint, changed) = {
+        let status = status.lock().expect("host-key status lock");
+        match status.as_ref() {
+            Some(HostKeyStatus::Changed { fingerprint }) => (fingerprint.clone(), true),
+            Some(HostKeyStatus::Unknown { fingerprint }) => (fingerprint.clone(), false),
+            None => (String::new(), false),
+        }
+    };
     if let Some(russh::Error::UnknownKey) = error.downcast_ref::<russh::Error>() {
-        return match *status.lock().expect("host-key status lock") {
-            Some(HostKeyStatus::Changed) => {
-                CoreError::HostKeyChanged("the server key no longer matches known_hosts".to_owned())
+        return if changed {
+            CoreError::HostKeyChanged {
+                fingerprint,
+                detail: "the server key no longer matches known_hosts".to_owned(),
             }
-            _ => {
-                CoreError::HostKeyUnknown("the server key is not present in known_hosts".to_owned())
+        } else {
+            CoreError::HostKeyUnknown {
+                fingerprint,
+                detail: "the server key is not present in known_hosts".to_owned(),
             }
         };
     }
@@ -539,9 +638,10 @@ fn map_connect_error(error: anyhow::Error, status: &Mutex<Option<HostKeyStatus>>
         Some(russh::Error::ConnectionTimeout)
         | Some(russh::Error::KeepaliveTimeout)
         | Some(russh::Error::InactivityTimeout) => CoreError::Timeout(error.to_string()),
-        Some(russh::Error::KeyChanged { line }) => {
-            CoreError::HostKeyChanged(format!("known_hosts line {line}"))
-        }
+        Some(russh::Error::KeyChanged { line }) => CoreError::HostKeyChanged {
+            fingerprint,
+            detail: format!("known_hosts line {line}"),
+        },
         Some(russh::Error::HUP)
         | Some(russh::Error::Disconnect)
         | Some(russh::Error::SendError)
@@ -555,12 +655,14 @@ fn map_ssh_error(error: russh::Error) -> CoreError {
         russh::Error::ConnectionTimeout
         | russh::Error::KeepaliveTimeout
         | russh::Error::InactivityTimeout => CoreError::Timeout(error.to_string()),
-        russh::Error::UnknownKey => {
-            CoreError::HostKeyUnknown("the server key is not trusted".to_owned())
-        }
-        russh::Error::KeyChanged { line } => {
-            CoreError::HostKeyChanged(format!("known_hosts line {line}"))
-        }
+        russh::Error::UnknownKey => CoreError::HostKeyUnknown {
+            fingerprint: String::new(),
+            detail: "the server key is not trusted".to_owned(),
+        },
+        russh::Error::KeyChanged { line } => CoreError::HostKeyChanged {
+            fingerprint: String::new(),
+            detail: format!("known_hosts line {line}"),
+        },
         russh::Error::HUP | russh::Error::Disconnect | russh::Error::SendError => {
             CoreError::Network(error.to_string())
         }
@@ -614,5 +716,49 @@ mod tests {
             Some("abc+/")
         );
         assert!(trusted_fingerprint(&path, "example.com", 2222).is_none());
+    }
+
+    #[test]
+    fn trusts_and_forgets_fingerprints() {
+        let directory = tempfile::TempDir::new().unwrap();
+        let path = directory.path().join("known_hosts.json");
+        trust_fingerprint(
+            &path,
+            "example.com",
+            22,
+            "SHA256:abcdefghijklmnopqrstuvwxyz012345==",
+        )
+        .unwrap();
+        assert_eq!(
+            trusted_fingerprint(&path, "example.com", 22).as_deref(),
+            Some("abcdefghijklmnopqrstuvwxyz012345")
+        );
+        forget_fingerprint(&path, "example.com", 22).unwrap();
+        assert!(trusted_fingerprint(&path, "example.com", 22).is_none());
+    }
+
+    #[test]
+    fn rejects_invalid_fingerprints() {
+        let directory = tempfile::TempDir::new().unwrap();
+        let path = directory.path().join("known_hosts.json");
+        assert!(trust_fingerprint(&path, "example.com", 22, "not-a-fingerprint").is_err());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn malformed_trust_store_is_not_overwritten() {
+        let directory = tempfile::TempDir::new().unwrap();
+        let path = directory.path().join("known_hosts.json");
+        std::fs::write(&path, b"not json").unwrap();
+        assert!(
+            trust_fingerprint(
+                &path,
+                "example.com",
+                22,
+                "abc1234567890123456789012345678901"
+            )
+            .is_err()
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), b"not json");
     }
 }

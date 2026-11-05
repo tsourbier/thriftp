@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import ConnectionEditor from "./components/connections/ConnectionEditor.svelte";
   import ConnectionStatus from "./components/connections/ConnectionStatus.svelte";
   import CredentialPrompt from "./components/connections/CredentialPrompt.svelte";
+  import HostKeyPrompt from "./components/connections/HostKeyPrompt.svelte";
   import SecurityPrompt from "./components/connections/SecurityPrompt.svelte";
   import DualPane from "./components/browser/DualPane.svelte";
   import InternalPreview from "./components/previews/InternalPreview.svelte";
@@ -11,31 +12,28 @@
   import AutomationPanel from "./components/automation/AutomationPanel.svelte";
   import RecoveryPanel from "./components/transfers/RecoveryPanel.svelte";
   import TabBar from "./components/tabs/TabBar.svelte";
-  import FavoritesSidebar from "./components/favorites/FavoritesSidebar.svelte";
   import SaveDirectoryFavoriteDialog from "./components/favorites/SaveDirectoryFavoriteDialog.svelte";
-  import ServerFavoritesList from "./components/server-favorites/FavoritesList.svelte";
   import EditFavoriteDialog from "./components/server-favorites/EditFavoriteDialog.svelte";
   import SaveFavoriteDialog from "./components/server-favorites/SaveFavoriteDialog.svelte";
   import CredentialPromptDialog from "./components/server-favorites/CredentialPromptDialog.svelte";
   import CredentialUnavailableBanner from "./components/server-favorites/CredentialUnavailableBanner.svelte";
   import CredentialImpactDialog from "./components/server-favorites/CredentialImpactDialog.svelte";
   import DeleteCredentialDialog from "./components/server-favorites/DeleteCredentialDialog.svelte";
+  import WorkspaceSidebar from "./components/workspace/WorkspaceSidebar.svelte";
+  import ConnectionHub from "./components/workspace/ConnectionHub.svelte";
+  import CommandPalette from "./components/workspace/CommandPalette.svelte";
   import {
     applyActiveConnections,
     connectFavorite as connectServerFavoriteStore,
-    favoriteConnectionStates,
-    favoritePreferences,
     loadServerFavorites,
     removeCredential as removeServerCredential,
     reusableCredentials as loadReusableCredentials,
     serverFavorites,
-    setPinned as setServerFavoritePinned,
-    setPreferences as setServerFavoritePreferences
+    setPinned as setServerFavoritePinned
   } from "./lib/server-favorites/stores";
   import { prefillFavorite } from "./lib/server-favorites/api";
   import { setActiveConnections } from "./lib/ipc/stores";
   import Inspector from "./components/inspector/Inspector.svelte";
-  import TextPrompt from "./components/common/TextPrompt.svelte";
   import { confirmAction } from "./lib/dialogs/confirm";
   import { newTab, restoreTabs } from "./lib/tabs/restore";
   import { prepareAndQuit } from "./lib/lifecycle/quit";
@@ -53,24 +51,34 @@
   import { focusTrap } from "./lib/accessibility/focus";
   import { applyTheme } from "./lib/theme/apply";
   import { IpcError, ipc } from "./lib/ipc/client";
+  import {
+    connectionHistory,
+    clearHistory as clearConnectionHistoryStore,
+    refreshHistory
+  } from "./lib/workspace/history";
+  import { effectiveSidebarVisible, normalizeLayout } from "./lib/workspace/layout";
+  import { buildEntries, type CommandPaletteEntry } from "./lib/commands/registry";
   import type {
     BrowsingSession,
     BrowserSource,
+    ConnectionHistoryEntry,
     ConnectionProfile,
     ConnectionView,
     DesktopError,
     DirectoryFavorite,
     CredentialImpact,
     CredentialPolicy,
-    FavoritePreferences,
     FileEntryView,
+    HubTab,
     Preferences,
     Priority,
     QueueView,
     ReusableCredential,
     ServerFavoriteInput,
     ServerFavoriteView,
-    TransferView
+    SidebarSectionKey,
+    TransferView,
+    WorkspaceLayout
   } from "./lib/ipc/types";
 
   let profiles = $state<ConnectionProfile[]>([]);
@@ -81,6 +89,12 @@
     code: string;
   } | null>(null);
   let securityProfile = $state<ConnectionProfile | null>(null);
+  let hostKeyRequest = $state<{
+    profile: ConnectionProfile;
+    favorite: ServerFavoriteView | null;
+    fingerprint: string;
+    changed: boolean;
+  } | null>(null);
   let notice = $state<DesktopError | null>(null);
   let transferNotice = $state<string | null>(null);
   let selectedConnectionId = $state<string | null>(null);
@@ -127,18 +141,44 @@
   } | null>(null);
   let preferences = $state<Preferences | null>(null);
   let preferencesOpen = $state(false);
-  let textPrompt = $state<{
-    title: string;
-    label: string;
-    initial: string;
-    submit: (value: string) => void;
-  } | null>(null);
+  let workspaceLayout = $state<WorkspaceLayout>({
+    splitRatio: 0.5,
+    sidebarVisible: true,
+    sidebarSections: {
+      servers: true,
+      directoryFavorites: true,
+      automation: true
+    },
+    hubTab: "favorites"
+  });
+  let viewportWidth = $state(1200);
+  let paletteOpen = $state(false);
+  let automationOpen = $state(false);
+  let layoutSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let refreshTick = $state(0);
+  let sidebarOverlay = $state(false);
+
+  const sidebarVisible = $derived(
+    sidebarOverlay || effectiveSidebarVisible(workspaceLayout, viewportWidth)
+  );
 
   onMount(() => {
     void refresh();
     void refreshTransfers();
     void loadServerFavorites();
     void loadAutomation();
+    void ipc
+      .workspaceGet()
+      .then((layout) => {
+        workspaceLayout = normalizeLayout(layout);
+      })
+      .catch((error) => {
+        notice = detailsOf(error);
+      });
+    void refreshHistory().catch((error) => {
+      notice = detailsOf(error);
+    });
+    viewportWidth = window.innerWidth;
     void loadPreferences().then((loaded) => {
       if (!loaded) {
         return;
@@ -244,20 +284,21 @@
     active.find((connection) => connection.connectionId === selectedConnectionId) ?? null
   );
 
+  const paletteEntries = $derived(
+    buildEntries({
+      servers: $serverFavorites,
+      directoryFavorites: favorites,
+      tabs,
+      recent: $connectionHistory,
+      connectedProfileIds: active.map((connection) => connection.profileId),
+      canRefresh: Boolean(selectedConnection)
+    })
+  );
+
   $effect(() => {
     setActiveConnections(active);
     applyActiveConnections($serverFavorites, active);
   });
-
-  const activeServerFavoriteId = $derived(
-    $serverFavorites.find((favorite) =>
-      active.some(
-        (connection) =>
-          connection.profileId === favorite.connectionProfileId &&
-          connection.state !== "error"
-      )
-    )?.id ?? null
-  );
 
   const activeTab = $derived(
     tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null
@@ -271,6 +312,169 @@
     }
     void loadFavorites(profileId);
   });
+
+  function scheduleLayoutSave() {
+    if (layoutSaveTimer) {
+      clearTimeout(layoutSaveTimer);
+    }
+    layoutSaveTimer = setTimeout(() => {
+      layoutSaveTimer = null;
+      void ipc.workspaceSet(workspaceLayout).catch((error) => {
+        notice = detailsOf(error);
+      });
+    }, 250);
+  }
+
+  function updateLayout(patch: Partial<WorkspaceLayout>) {
+    workspaceLayout = normalizeLayout({ ...workspaceLayout, ...patch });
+    scheduleLayoutSave();
+  }
+
+  function setHubTab(tab: HubTab) {
+    updateLayout({ hubTab: tab });
+  }
+
+  function toggleSidebar() {
+    if (sidebarOverlay) {
+      sidebarOverlay = false;
+      return;
+    }
+    if (!effectiveSidebarVisible(workspaceLayout, viewportWidth)) {
+      sidebarOverlay = true;
+      return;
+    }
+    updateLayout({ sidebarVisible: !workspaceLayout.sidebarVisible });
+  }
+
+  function toggleSidebarSection(key: SidebarSectionKey, value: boolean) {
+    updateLayout({
+      sidebarSections: { ...workspaceLayout.sidebarSections, [key]: value }
+    });
+  }
+
+  function commitSplit(ratio: number) {
+    updateLayout({ splitRatio: ratio });
+  }
+
+  function toggleHiddenForActiveTab() {
+    if (!activeTab) {
+      return;
+    }
+    tabs = tabs.map((tab) =>
+      tab.id === activeTab.id
+        ? {
+            ...tab,
+            viewSettings: {
+              ...tab.viewSettings,
+              showHidden: !tab.viewSettings.showHidden
+            }
+          }
+        : tab
+    );
+    void saveTabs();
+  }
+
+  async function runPaletteEntry(entry: CommandPaletteEntry) {
+    paletteOpen = false;
+    switch (entry.action.type) {
+      case "connect-server": {
+        const favorite = $serverFavorites.find(
+          (candidate) => candidate.id === entry.action.favoriteId
+        );
+        if (favorite) {
+          await connectServerFavorite(favorite);
+        }
+        break;
+      }
+      case "navigate-favorite":
+        openFavorite(entry.action.favorite);
+        break;
+      case "activate-tab": {
+        const tab = tabs.find((candidate) => candidate.id === entry.action.tabId);
+        if (tab) {
+          selectTab(tab);
+        }
+        break;
+      }
+      case "new-connection":
+        editor = { profile: null };
+        break;
+      case "new-favorite":
+        await openServerFavoriteDraft();
+        break;
+      case "preferences":
+        preferencesOpen = true;
+        break;
+      case "refresh-pane":
+        refreshTick += 1;
+        break;
+      case "toggle-hidden":
+        toggleHiddenForActiveTab();
+        break;
+    }
+  }
+
+  async function connectHistoryEntry(entry: ConnectionHistoryEntry) {
+    if (entry.favoriteId) {
+      const favorite = $serverFavorites.find(
+        (candidate) => candidate.id === entry.favoriteId
+      );
+      if (favorite) {
+        await connectServerFavorite(favorite);
+        return;
+      }
+    }
+    const profile = profiles.find(
+      (candidate) => candidate.id === entry.connectionProfileId
+    );
+    if (profile) {
+      await connectNow(profile);
+    } else {
+      notice = {
+        code: "not_found",
+        message: "That saved server no longer exists."
+      };
+    }
+  }
+
+  async function clearConnectionHistory() {
+    if (!(await confirmAction("Clear all connection history?", "Clear history"))) {
+      return;
+    }
+    try {
+      await clearConnectionHistoryStore(true);
+    } catch (error) {
+      notice = detailsOf(error);
+    }
+  }
+
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+      const modalOpen =
+        Boolean(editor) ||
+        Boolean(credentialRequest) ||
+        Boolean(securityProfile) ||
+        Boolean(inspector) ||
+        Boolean(serverFavoriteEditor) ||
+        Boolean(serverFavoriteDraft) ||
+        Boolean(credentialImpactRequest) ||
+        Boolean(deleteCredentialRequest) ||
+        Boolean(serverCredentialRequest) ||
+        Boolean(preview) ||
+        Boolean(quitPrompt) ||
+        preferencesOpen ||
+        automationOpen;
+      if (modalOpen) {
+        return;
+      }
+      event.preventDefault();
+      paletteOpen = true;
+      return;
+    }
+    if (event.key === "Escape" && paletteOpen) {
+      paletteOpen = false;
+    }
+  }
 
   async function refresh() {
     try {
@@ -338,6 +542,7 @@
       selectedConnectionId = connection.connectionId;
       ensureTab(connection);
       notice = null;
+      void refreshHistory();
     } catch (error) {
       handleConnectionError(error, profile);
     }
@@ -345,6 +550,9 @@
 
   function handleConnectionError(error: unknown, profile: ConnectionProfile) {
     const details = detailsOf(error);
+    if (requestHostKeyTrust(details, profile, null)) {
+      return;
+    }
     if (
       details.code === "credential_missing" ||
       details.code === "credential_store_unavailable" ||
@@ -354,6 +562,45 @@
       return;
     }
     notice = details;
+  }
+
+  function requestHostKeyTrust(
+    details: DesktopError,
+    profile: ConnectionProfile,
+    favorite: ServerFavoriteView | null
+  ): boolean {
+    if (
+      (details.code === "host_key_unknown" || details.code === "host_key_changed") &&
+      details.fingerprint
+    ) {
+      notice = null;
+      hostKeyRequest = {
+        profile,
+        favorite,
+        fingerprint: details.fingerprint,
+        changed: details.code === "host_key_changed"
+      };
+      return true;
+    }
+    return false;
+  }
+
+  async function trustHostKey() {
+    const request = hostKeyRequest;
+    hostKeyRequest = null;
+    if (!request) {
+      return;
+    }
+    try {
+      await ipc.trustHostKey(request.profile.id, request.fingerprint);
+      if (request.favorite) {
+        await connectServerFavorite(request.favorite);
+      } else {
+        await connectNow(request.profile);
+      }
+    } catch (error) {
+      notice = detailsOf(error);
+    }
   }
 
   async function confirmPlainFtp() {
@@ -389,6 +636,7 @@
       selectedConnectionId = replacement.connectionId;
       ensureTab(replacement);
       notice = null;
+      void refreshHistory();
     } catch (error) {
       handleConnectionError(error, profile);
     }
@@ -601,56 +849,6 @@
     }
   }
 
-  async function deleteFavorite(favorite: DirectoryFavorite) {
-    try {
-      await ipc.favoritesDelete(favorite.id);
-      await loadFavorites(favorite.connectionProfileId);
-    } catch (error) {
-      notice = detailsOf(error);
-    }
-  }
-
-  async function moveFavorite(favorite: DirectoryFavorite, delta: number) {
-    const order = favorites
-      .filter(
-        (candidate) => candidate.connectionProfileId === favorite.connectionProfileId
-      )
-      .map((candidate) => candidate.id);
-    const index = order.indexOf(favorite.id);
-    const target = index + delta;
-    if (index < 0 || target < 0 || target >= order.length) {
-      return;
-    }
-    [order[index], order[target]] = [order[target], order[index]];
-    try {
-      await ipc.favoritesReorder(favorite.connectionProfileId, order);
-      await loadFavorites(favorite.connectionProfileId);
-    } catch (error) {
-      notice = detailsOf(error);
-    }
-  }
-
-  function editFavorite(favorite: DirectoryFavorite) {
-    textPrompt = {
-      title: "Favorite label",
-      label: "Label",
-      initial: favorite.label,
-      submit: (label) => {
-        if (label === favorite.label) {
-          return;
-        }
-        void (async () => {
-          try {
-            await ipc.favoritesUpdate(favorite.id, label);
-            await loadFavorites(favorite.connectionProfileId);
-          } catch (error) {
-            notice = detailsOf(error);
-          }
-        })();
-      }
-    };
-  }
-
   function openFavorite(favorite: DirectoryFavorite) {
     const connection = active.find(
       (candidate) => candidate.profileId === favorite.connectionProfileId
@@ -822,7 +1020,9 @@
       authMethod: favorite.authMethod,
       timeoutSeconds: favorite.timeoutSeconds,
       sshKeyRef: favorite.sshKeyRef,
-      pinned: favorite.pinned
+      pinned: favorite.pinned,
+      localPath: favorite.localPath,
+      remotePath: favorite.remotePath
     };
   }
 
@@ -864,7 +1064,11 @@
       return;
     }
     try {
-      const prefilled = await prefillFavorite(selectedConnection.connectionId);
+      const prefilled = await prefillFavorite(
+        selectedConnection.connectionId,
+        activeTab?.localPath ?? null,
+        activeTab?.currentPath ?? null
+      );
       if (prefilled.favoriteId) {
         const existing = $serverFavorites.find(
           (favorite) => favorite.id === prefilled.favoriteId
@@ -1007,9 +1211,18 @@
       ];
       selectedConnectionId = connection.connectionId;
       ensureTab(connection);
+      await tick();
+      await restoreFavoritePaths(favorite, connection);
       await loadServerFavorites();
+      void refreshHistory();
     } catch (error) {
       const details = detailsOf(error);
+      const profile = profiles.find(
+        (candidate) => candidate.id === favorite.connectionProfileId
+      );
+      if (profile && requestHostKeyTrust(details, profile, favorite)) {
+        return;
+      }
       if (credentialError(error)) {
         if (details.code === "credential_store_unavailable") {
           serverCredentialBanner = { code: details.code, favorite };
@@ -1018,6 +1231,42 @@
       } else {
         notice = details;
       }
+    }
+  }
+
+  async function restoreFavoritePaths(
+    favorite: ServerFavoriteView,
+    connection: ConnectionView
+  ) {
+    const notices: string[] = [];
+    if (favorite.localPath) {
+      try {
+        const resolved = await ipc.resolvePath("local", favorite.localPath);
+        updateActiveTabLocalPath(resolved.path);
+        if (resolved.notice) {
+          notices.push(resolved.notice.message);
+        }
+      } catch {
+        notices.push("The saved local folder could not be opened.");
+      }
+    }
+    if (favorite.remotePath) {
+      try {
+        const resolved = await ipc.resolvePath(
+          "remote",
+          favorite.remotePath,
+          connection.connectionId
+        );
+        updateActiveTabPath(resolved.path);
+        if (resolved.notice) {
+          notices.push(resolved.notice.message);
+        }
+      } catch {
+        notices.push("The saved remote folder could not be opened.");
+      }
+    }
+    if (notices.length > 0) {
+      transferNotice = notices[0];
     }
   }
 
@@ -1052,7 +1301,10 @@
       ];
       selectedConnectionId = connection.connectionId;
       ensureTab(connection);
+      await tick();
+      await restoreFavoritePaths(request.favorite, connection);
       await loadServerFavorites();
+      void refreshHistory();
     } catch (error) {
       notice = detailsOf(error);
     }
@@ -1097,41 +1349,6 @@
     }
   }
 
-  async function sortServerFavorites(sortKey: FavoritePreferences["sortKey"]) {
-    try {
-      await setServerFavoritePreferences({ ...$favoritePreferences, sortKey });
-    } catch (error) {
-      notice = detailsOf(error);
-    }
-  }
-
-  async function groupServerFavorite(favorite: ServerFavoriteView, label: string) {
-    try {
-      await ipc.serverFavoritesSetGroup(favorite.id, label);
-      await loadServerFavorites();
-    } catch (error) {
-      notice = detailsOf(error);
-    }
-  }
-
-  async function ungroupServerFavorite(favorite: ServerFavoriteView) {
-    try {
-      await ipc.serverFavoritesSetGroup(favorite.id, null);
-      await loadServerFavorites();
-    } catch (error) {
-      notice = detailsOf(error);
-    }
-  }
-
-  async function renameServerFavoriteGroup(oldLabel: string, newLabel: string) {
-    try {
-      await ipc.serverFavoritesRenameGroup(oldLabel, newLabel);
-      await loadServerFavorites();
-    } catch (error) {
-      notice = detailsOf(error);
-    }
-  }
-
   async function testServerFavorite(
     profile: Parameters<typeof ipc.serverFavoritesTestConnection>[0],
     secret?: string
@@ -1143,6 +1360,11 @@
     }
   }
 </script>
+
+<svelte:window
+  onkeydown={handleGlobalKeydown}
+  onresize={() => (viewportWidth = window.innerWidth)}
+/>
 
 <main class="shell">
   <header class="titlebar">
@@ -1194,20 +1416,28 @@
           }}
         />
       {/if}
-      <ServerFavoritesList
-        favorites={$serverFavorites}
-        preferences={$favoritePreferences}
-        activeFavoriteId={activeServerFavoriteId}
-        connectionStates={$favoriteConnectionStates}
+      <WorkspaceSidebar
+        layout={workspaceLayout}
+        visible={sidebarVisible}
+        overlay={sidebarOverlay}
+        servers={$serverFavorites}
+        directoryFavorites={favorites}
+        automationEnabled={$automationStatus?.enabled ?? false}
+        oncollapse={toggleSidebar}
+        onreopen={toggleSidebar}
+        ontogglesection={toggleSidebarSection}
         onconnect={connectServerFavorite}
+        onopenfavorite={openFavorite}
         onedit={(favorite) => void openServerFavoriteEditor(favorite)}
         ondelete={deleteServerFavorite}
         onpin={pinServerFavorite}
-        onsort={sortServerFavorites}
-        ongroup={groupServerFavorite}
-        onrenamegroup={renameServerFavoriteGroup}
-        onungroup={ungroupServerFavorite}
         oncreate={() => void openServerFavoriteDraft()}
+        onopenautomation={() => (automationOpen = true)}
+        onsavedirectoryfavorite={() => {
+          if (activeTab) {
+            favoritePath = activeTab.currentPath;
+          }
+        }}
       />
     </section>
 
@@ -1257,21 +1487,21 @@
         {/if}
       {/if}
       <div class="browser-body">
-        {#if selectedConnection}
-          <FavoritesSidebar
-            {favorites}
-            canSave={Boolean(activeTab)}
-            onopen={openFavorite}
-            onsave={() => {
-              if (activeTab) {
-                favoritePath = activeTab.currentPath;
-              }
-            }}
-            ondelete={deleteFavorite}
-            onedit={editFavorite}
-            onmove={moveFavorite}
+        {#snippet remoteFallback()}
+          <ConnectionHub
+            favorites={$serverFavorites}
+            history={$connectionHistory}
+            hubTab={workspaceLayout.hubTab}
+            onselecttab={setHubTab}
+            onconnect={connectServerFavorite}
+            onhistoryconnect={connectHistoryEntry}
+            onedit={(favorite) => void openServerFavoriteEditor(favorite)}
+            ondelete={deleteServerFavorite}
+            onpin={pinServerFavorite}
+            oncreate={() => void openServerFavoriteDraft()}
+            onclearhistory={clearConnectionHistory}
           />
-        {/if}
+        {/snippet}
         <DualPane
           connectionId={selectedConnection?.connectionId ?? null}
           connectionLabel={selectedConnectionLabel()}
@@ -1280,6 +1510,10 @@
           localPath={activeTab?.localPath ?? "."}
           localSelectedItems={activeTab?.localSelectedItems ?? []}
           remoteSelectedItems={activeTab?.selectedItems ?? []}
+          splitRatio={workspaceLayout.splitRatio}
+          onsplitcommit={commitSplit}
+          {remoteFallback}
+          refreshSignal={refreshTick}
           onlocalpathchange={updateActiveTabLocalPath}
           onselectionchange={updateActiveTabSelection}
           defaultShowHidden={activeTab?.viewSettings.showHidden ??
@@ -1315,17 +1549,46 @@
   </div>
 </main>
 
-<section class="automation-surface" aria-label="MCP automation controls">
-  <AutomationPanel
-    status={$automationStatus}
-    onenable={(mode) => void enableAutomation(mode)}
-    ondisable={() => void disableAutomation()}
-    onapprove={(input) => void approveClient(input)}
-    ondeny={(requestId) => void denyClient(requestId)}
-    onrevoke={(fingerprint) => void revokeClient(fingerprint)}
-    ondisconnect={(fingerprint) => void disconnectClient(fingerprint)}
+{#if automationOpen}
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    use:focusTrap
+    aria-label="MCP automation controls"
+    onmousedown={(event) => {
+      if (event.target === event.currentTarget) {
+        automationOpen = false;
+      }
+    }}
+  >
+    <div class="automation-panel">
+      <div class="automation-head">
+        <h2>MCP automation</h2>
+        <button type="button" onclick={() => (automationOpen = false)}>Close</button>
+      </div>
+      <AutomationPanel
+        status={$automationStatus}
+        onenable={(mode) => void enableAutomation(mode)}
+        ondisable={() => void disableAutomation()}
+        onapprove={(input) => void approveClient(input)}
+        ondeny={(requestId) => void denyClient(requestId)}
+        onrevoke={(fingerprint) => void revokeClient(fingerprint)}
+        ondisconnect={(fingerprint) => void disconnectClient(fingerprint)}
+      />
+    </div>
+  </div>
+{/if}
+
+{#if paletteOpen}
+  <CommandPalette
+    entries={paletteEntries}
+    recent={$connectionHistory}
+    onrun={(entry) => void runPaletteEntry(entry)}
+    onclose={() => (paletteOpen = false)}
   />
-</section>
+{/if}
 
 {#if editor}
   <div
@@ -1527,28 +1790,6 @@
   </div>
 {/if}
 
-{#if textPrompt}
-  <div
-    class="modal"
-    role="dialog"
-    aria-modal="true"
-    use:focusTrap
-    aria-label={textPrompt.title}
-  >
-    <TextPrompt
-      title={textPrompt.title}
-      label={textPrompt.label}
-      initial={textPrompt.initial}
-      onsubmit={(value) => {
-        const submit = textPrompt?.submit;
-        textPrompt = null;
-        submit?.(value);
-      }}
-      oncancel={() => (textPrompt = null)}
-    />
-  </div>
-{/if}
-
 {#if preferencesOpen && preferences}
   <div
     class="modal"
@@ -1624,6 +1865,26 @@
   </div>
 {/if}
 
+{#if hostKeyRequest}
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    use:focusTrap
+    aria-label="Verify SSH host key"
+  >
+    <HostKeyPrompt
+      profileName={hostKeyRequest.profile.displayName}
+      host={hostKeyRequest.profile.host}
+      port={hostKeyRequest.profile.port}
+      fingerprint={hostKeyRequest.fingerprint}
+      changed={hostKeyRequest.changed}
+      ontrust={() => void trustHostKey()}
+      oncancel={() => (hostKeyRequest = null)}
+    />
+  </div>
+{/if}
+
 <style>
   .shell {
     display: flex;
@@ -1636,7 +1897,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    border-bottom: 1px solid #d0d0d0;
+    border-bottom: 1px solid var(--border);
   }
   .titlebar h1 {
     font-size: 1rem;
@@ -1674,6 +1935,32 @@
     display: flex;
     flex: 1;
     min-height: 0;
+    position: relative;
+  }
+  .server-favorites-panel {
+    display: flex;
+    min-height: 0;
+  }
+  .automation-panel {
+    display: grid;
+    gap: 0.5rem;
+    min-width: 24rem;
+    max-width: min(48rem, 90vw);
+    max-height: 85vh;
+    overflow: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+  }
+  .automation-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .automation-head h2 {
+    margin: 0;
+    font-size: 1rem;
   }
   .browser-area {
     display: flex;
@@ -1690,7 +1977,7 @@
   }
   .connection-picker {
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #d0d0d0;
+    border-bottom: 1px solid var(--border);
     font-size: 0.8rem;
   }
   .connection-picker label {
@@ -1701,10 +1988,10 @@
   .transport-warning {
     margin: 0;
     padding: 0.4rem 0.75rem;
-    background: #fff3cd;
-    color: #6b4b00;
+    background: var(--warning);
+    color: var(--warning-text);
     font-size: 0.8rem;
-    border-bottom: 1px solid #e0c26a;
+    border-bottom: 1px solid var(--warning-text);
   }
   .transfer-notice {
     display: flex;
@@ -1712,8 +1999,8 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 0.45rem 1rem;
-    background: #e7f5e7;
-    color: #1a5c1a;
+    background: var(--success);
+    color: var(--success-text);
     font-size: 0.85rem;
   }
   .error {
@@ -1723,8 +2010,8 @@
     gap: 1rem;
     margin: 0;
     padding: 0.5rem 1rem;
-    background: #ffe5e5;
-    color: #8a0000;
+    background: var(--surface-muted);
+    color: var(--danger-text);
   }
   .modal {
     position: fixed;
@@ -1760,6 +2047,6 @@
     gap: 0.5rem;
   }
   .quit-dialog .danger {
-    color: #8a0000;
+    color: var(--danger-text);
   }
 </style>

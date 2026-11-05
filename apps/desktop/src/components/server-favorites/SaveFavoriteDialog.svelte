@@ -7,6 +7,7 @@
     ServerFavoriteInput,
     ServerFavoriteView
   } from "../../lib/ipc/types";
+  import SshKeyField from "../connections/SshKeyField.svelte";
   import ReuseCredentialDialog from "./ReuseCredentialDialog.svelte";
 
   let {
@@ -39,7 +40,6 @@
     ) => Promise<{ ok: boolean; error?: { message?: string } | unknown }>;
   } = $props();
 
-  /* eslint-disable svelte/valid-compile */
   let displayName = $state(initial?.displayName ?? "");
   let protocol = $state<Protocol>(initial?.protocol ?? "sftp");
   let host = $state(initial?.host ?? "");
@@ -49,10 +49,11 @@
   let authMethod = $state<AuthMethod>(initial?.authMethod ?? "password");
   let timeoutSeconds = $state(initial?.timeoutSeconds ?? 30);
   let sshKeyRef = $state(initial?.sshKeyRef ?? "");
+  let localPath = $state(initial?.localPath ?? "");
+  let remotePath = $state(initial?.remotePath ?? "");
   let pinned = $state(initial?.pinned ?? false);
   let policy = $state<CredentialPolicy>(initialPolicy);
   let credentialRefId = $state(initialCredentialRefId ?? "");
-  /* eslint-enable svelte/valid-compile */
   let secret = $state("");
   let testSecret = $state("");
   let showReuseDialog = $state(false);
@@ -106,8 +107,14 @@
       authMethod: passwordOnly ? "password" : authMethod,
       timeoutSeconds,
       sshKeyRef: usesPrivateKey ? sshKeyRef || null : null,
-      pinned
+      pinned,
+      localPath: localPath.trim() || null,
+      remotePath: remotePath.trim() || null
     };
+  }
+
+  function isAbsoluteLocalPath(path: string): boolean {
+    return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path);
   }
 
   function validate(): string | null {
@@ -122,6 +129,12 @@
     }
     if (usesPrivateKey && !sshKeyRef.trim()) {
       return "A private-key reference is required for SSH key authentication.";
+    }
+    if (localPath.trim() && !isAbsoluteLocalPath(localPath.trim())) {
+      return "Local path must be absolute.";
+    }
+    if (remotePath.trim() && !remotePath.trim().startsWith("/")) {
+      return "Remote path must be an absolute server path.";
     }
     if (
       initial &&
@@ -217,11 +230,24 @@
     </select>
   </label>
   {#if usesPrivateKey}
-    <label>
-      SSH key reference
-      <input bind:value={sshKeyRef} placeholder="~/.ssh/id_ed25519" />
-    </label>
+    <SshKeyField bind:value={sshKeyRef} onchange={markChanged} />
   {/if}
+  <label
+    >Local path
+    <input
+      bind:value={localPath}
+      placeholder="Optional absolute local folder"
+      spellcheck="false"
+    /></label
+  >
+  <label
+    >Remote path
+    <input
+      bind:value={remotePath}
+      placeholder="Optional absolute remote folder"
+      spellcheck="false"
+    /></label
+  >
   <label
     >Timeout <input type="number" bind:value={timeoutSeconds} min="1" max="300" /></label
   >
@@ -324,10 +350,10 @@
     gap: 0.5rem;
   }
   .error {
-    color: var(--server-favorites-error, #8a0000);
+    color: var(--danger-text);
   }
   .nested-dialog {
-    border: 1px solid var(--server-favorites-border, #d0d0d0);
+    border: 1px solid var(--border);
     border-radius: 0.4rem;
     padding: 0.5rem;
   }

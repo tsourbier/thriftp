@@ -45,6 +45,12 @@ pub struct ServerFavorite {
     pub last_used_at: Option<DateTime<Utc>>,
     pub credential_policy: CredentialPolicy,
     pub credential_ref_id: Option<Uuid>,
+    /// Optional absolute local folder to restore on connect.
+    #[serde(default)]
+    pub local_path: Option<String>,
+    /// Optional absolute remote folder to restore on connect.
+    #[serde(default)]
+    pub remote_path: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -63,6 +69,8 @@ impl ServerFavorite {
             last_used_at: None,
             credential_policy,
             credential_ref_id,
+            local_path: None,
+            remote_path: None,
             created_at: now,
             updated_at: now,
         }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from "svelte";
+  import SshKeyField from "./SshKeyField.svelte";
   import type {
     AuthMethod,
     ConnectionProfile,
@@ -132,10 +133,7 @@
   </label>
 
   {#if authMethod === "sshPrivateKey"}
-    <label>
-      SSH key reference
-      <input bind:value={sshKeyRef} required />
-    </label>
+    <SshKeyField bind:value={sshKeyRef} />
   {/if}
 
   <label>

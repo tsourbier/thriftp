@@ -11,7 +11,6 @@
     onungroup: () => void;
   } = $props();
 
-  // eslint-disable-next-line svelte/valid-compile
   let label = $state(groupLabel ?? "");
 
   function assign() {

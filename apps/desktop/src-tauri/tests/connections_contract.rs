@@ -145,6 +145,38 @@ fn setup() -> (ConnectionService, CredentialService) {
     )
 }
 
+#[test]
+fn trust_host_key_persists_an_sftp_fingerprint() {
+    let (mut service, _) = setup();
+    let stored = service.create_profile(profile("server")).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("known_hosts.json");
+    let fingerprint = "abcdefghijklmnopqrstuvwxyz012345";
+
+    connections::trust_host_key(&service, stored, fingerprint, &path).unwrap();
+
+    assert_eq!(
+        thriftp_protocols::trusted_fingerprint(&path, "example.test", 22).as_deref(),
+        Some(fingerprint)
+    );
+}
+
+#[test]
+fn trust_host_key_rejects_non_sftp_profiles() {
+    let (mut service, _) = setup();
+    let mut ftp = profile("ftp");
+    ftp.protocol = Protocol::Ftp;
+    let stored = service.create_profile(ftp).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("known_hosts.json");
+
+    let error =
+        connections::trust_host_key(&service, stored, "abcdefghijklmnopqrstuvwxyz012345", &path)
+            .unwrap_err();
+
+    assert!(matches!(error, CoreError::Validation(_)));
+}
+
 #[tokio::test]
 async fn create_binds_a_credential_and_connect_uses_it() {
     let (mut service, credentials) = setup();
