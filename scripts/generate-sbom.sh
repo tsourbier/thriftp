@@ -2,8 +2,9 @@
 set -euo pipefail
 
 OUTPUT="${1:-target/sbom.json}"
-NPM_OUTPUT="$(dirname "$OUTPUT")/sbom-npm.json"
 mkdir -p "$(dirname "$OUTPUT")"
+OUTPUT_DIR="$(cd "$(dirname "$OUTPUT")" && pwd)"
+NPM_OUTPUT="$OUTPUT_DIR/sbom-npm.json"
 
 if command -v cargo-cyclonedx >/dev/null 2>&1; then
   find crates tests/integration -name 'sbom.json' -type f -delete 2>/dev/null || true
@@ -24,7 +25,7 @@ else
 fi
 
 if command -v npm >/dev/null 2>&1 && [ -f apps/desktop/package-lock.json ]; then
-  (cd apps/desktop && npm sbom --sbom-format cyclonedx > "../../$NPM_OUTPUT")
+  (cd apps/desktop && npm sbom --package-lock-only --sbom-format cyclonedx > "$NPM_OUTPUT")
   echo "npm SBOM written to $NPM_OUTPUT"
 fi
 

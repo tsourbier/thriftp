@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import appIcon from "../src-tauri/icons/icon.png";
   import ConnectionEditor from "./components/connections/ConnectionEditor.svelte";
   import CredentialPrompt from "./components/connections/CredentialPrompt.svelte";
   import HostKeyPrompt from "./components/connections/HostKeyPrompt.svelte";
@@ -1323,7 +1324,10 @@
 
 <main class="shell">
   <header class="titlebar">
-    <h1>Thriftp</h1>
+    <div class="title-brand">
+      <img class="app-icon" src={appIcon} alt="" />
+      <h1>Thriftp</h1>
+    </div>
     <div class="title-actions">
       <button type="button" onclick={() => (preferencesOpen = true)}>Preferences</button>
       <button type="button" onclick={() => void openServerFavoriteDraft()}>
@@ -1857,6 +1861,16 @@
     justify-content: space-between;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--border);
+  }
+  .title-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .app-icon {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.3rem;
   }
   .titlebar h1 {
     font-size: 1rem;

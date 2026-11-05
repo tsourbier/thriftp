@@ -50,6 +50,7 @@ run --test ftp_parse
 run --test connection_integration ftp_ -- --test-threads=1
 run --test connection_integration sftp_ -- --test-threads=1
 run --test transfer_integration local_copy -- --test-threads=1
+restart_service ftp
 run --test transfer_integration ftp_ -- --test-threads=1
 run --test transfer_integration sftp_ -- --test-threads=1
 

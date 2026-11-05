@@ -252,10 +252,12 @@ fn resolve_profile(
 }
 
 fn operation_secret(profile: &ConnectionProfile) -> CoreResult<Option<Secret>> {
-    match stored_secret(profile)? {
-        Some(secret) => Ok(Some(secret)),
-        None => Ok(crate::cli_secret().map(|secret| Secret::new(secret.expose().to_vec()))),
+    // An explicit stdin secret applies to this invocation and must not depend
+    // on the native credential store being available.
+    if let Some(secret) = crate::cli_secret() {
+        return Ok(Some(Secret::new(secret.expose().to_vec())));
     }
+    stored_secret(profile)
 }
 
 fn credential_service() -> CredentialService {

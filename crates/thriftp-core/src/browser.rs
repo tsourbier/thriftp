@@ -4,7 +4,9 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 
 use crate::error::{CoreError, CoreResult};
-use crate::model::{EntryType, FileEntry, Ownership, ProtocolCapabilities};
+#[cfg(unix)]
+use crate::model::Ownership;
+use crate::model::{EntryType, FileEntry, ProtocolCapabilities};
 use crate::protocol::RemoteFs;
 
 pub mod delete;
