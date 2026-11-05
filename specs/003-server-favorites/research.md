@@ -91,9 +91,9 @@ All technical unknowns from the plan's Technical Context are resolved below.
 
 ## Decision 9: Testing strategy
 
-**Decision**: Test core services with in-memory repository and fake credential-store implementations. Test adapters against temporary directories and, where the OS backend is available, against the native store. Test Tauri commands at the IPC boundary. Test Svelte components with Vitest and Testing Library. Run formatting, linting, unit/integration tests, and builds in a macOS/Linux/Windows CI matrix. Use real-keychain smoke tests only where the runner provides a usable backend.
+**Decision**: Test core services with in-memory repository and fake credential-store implementations. Test adapters against temporary directories and, where the OS backend is available, against the native store. Test Tauri commands at the IPC boundary. Test Svelte components with Vitest and Testing Library. Run formatting, linting, Docker-free unit/integration tests, and builds in a macOS/Linux/Windows CI matrix. Use real-keychain smoke tests only where the runner provides a usable backend. This feature has no protocol-server integration tests; the shared `001` Docker Compose protocol suite is a separate CI stage and is never required by this feature's tests.
 
-**Rationale**: Most behavior can be tested deterministically without real secrets. Native-store tests remain necessary to catch platform integration issues, but must not make CI depend on a logged-in desktop session.
+**Rationale**: Most behavior can be tested deterministically without real secrets or containers. Native credential-store tests remain necessary to catch platform integration issues, but must not make CI depend on a logged-in desktop session. Keeping the protocol integration stage separate prevents Docker from becoming a prerequisite for favorites tests.
 
 **Alternatives considered**:
 - Real keychain for every test: flaky on headless CI and may require user interaction.
@@ -164,9 +164,9 @@ All technical unknowns from the plan's Technical Context are resolved below.
 
 ## Decision 16: CI and supply-chain gates
 
-**Decision**: CI runs `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo audit`, frontend lint and Vitest suites, and builds on macOS, Linux, and Windows. Dependencies and CI actions are pinned, lockfiles are committed and enforced, and an SBOM is generated for official releases.
+**Decision**: CI runs `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, `cargo audit`, frontend lint and Vitest suites, and builds on macOS, Linux, and Windows. Test classes are reported separately: Docker-free unit/integration/component tests, platform-specific credential-store tests, and the shared `001` containerized protocol integration stage when applicable. Dependencies and CI actions are pinned, lockfiles are committed and enforced, and an SBOM is generated for official releases.
 
-**Rationale**: The constitution requires cross-platform validation, SBOM generation for releases, pinned dependencies and actions, and committed lockfiles.
+**Rationale**: The constitution requires cross-platform validation, separate test classes, SBOM generation for releases, pinned dependencies and actions, and committed lockfiles. Keeping the containerized protocol stage separate ensures a missing container runtime cannot block or mask this feature's tests.
 
 **Alternatives considered**:
 - Ad hoc local checks only: does not satisfy the constitution's CI gates.
@@ -185,10 +185,10 @@ All technical unknowns from the plan's Technical Context are resolved below.
 | Error model | Typed codes with redacted messages |
 | Ordering | Pinned first, then deterministic sort |
 | Grouping | Reuse Connection Profile group label |
-| Testing | Fakes plus adapter and IPC tests, cross-platform CI |
+| Testing | Docker-free unit, adapter, and IPC tests; platform-specific credential-store tests; no container runtime required for this feature |
 | Secret lifetime | Zeroized in-memory type; never returned to UI |
 | Schema safety | Versioned JSON, atomic writes, backup, migrations |
 | Last used | Successful connections only; tests do not update |
 | CLI/MCP scope | Core reusable; management deferred |
 | Observability | `tracing` with contextual fields and secret redaction |
-| CI and supply chain | Pinned deps/actions, lockfiles, audits, SBOM, cross-platform builds |
+| CI and supply chain | Pinned deps/actions, lockfiles, audits, SBOM, cross-platform builds, separate shared protocol-integration stage |

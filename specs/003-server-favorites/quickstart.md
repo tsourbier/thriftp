@@ -13,7 +13,7 @@ This guide defines runnable validation scenarios for the feature. It is a valida
   - macOS: Keychain unlocked.
   - Windows: Credential Manager available for the current user.
   - Linux: Secret Service provider running (for example, GNOME Keyring or KWallet).
-- A local or disposable FTP, FTPS, or SFTP test server, or the project's test doubles.
+- No container runtime is required for this feature's tests. The shared `001` containerized protocol integration suite is run separately when needed.
 - Test credentials only; never use production secrets.
 
 ## Setup
@@ -34,6 +34,17 @@ cargo audit
 pnpm audit
 pnpm test
 ```
+
+### Test Classes
+
+| Class | Requires a container runtime | How to run |
+|-------|------------------------------|------------|
+| Core unit/integration | No | `cargo test --workspace` |
+| Tauri IPC and component | No | `cargo test` / `pnpm test` |
+| Platform-specific credential store | No | Platform-specific smoke test targets |
+| Shared protocol integration from `001` | Yes, when run | `scripts/test-integration.sh` (separate stage) |
+
+A missing container runtime must not block this feature's unit, integration, component, or platform-specific tests. Docker is never required to build, package, or run Thriftp.
 
 Build validation:
 
@@ -195,3 +206,4 @@ Run the automated suite on macOS, Linux, and Windows. On each platform, perform 
 - Active connections survive favorite edits and deletion.
 - Shared credentials behave consistently and deletion is explicit.
 - The core test suite, frontend tests, Clippy, formatting, and platform builds pass.
+- No container runtime is required for this feature's tests; the shared protocol integration suite remains a separate stage.

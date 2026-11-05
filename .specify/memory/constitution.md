@@ -182,6 +182,24 @@ by a constitution amendment; it MUST NOT be merged with an undocumented exceptio
 AI agents MUST follow the same gates as human contributors, including acceptance criteria,
 tests, documented architecture decisions, and documentation updates.
 
+## Containerized Integration Testing
+
+Protocol integration tests SHOULD use containerized test services where appropriate to provide
+reproducible, isolated test environments. Docker-compatible container runtimes, including
+Docker Desktop, MAY be used on macOS, Linux, and Windows. Testing infrastructure MUST NOT
+assume that Docker is available only on Linux.
+
+Development and CI workflows MUST clearly distinguish unit tests, integration tests that
+require a container runtime, and platform-specific tests. Containerized integration tests MUST
+be runnable locally on every supported development platform where a compatible container
+runtime is available. The absence of a container runtime MUST NOT prevent developers from
+running unit tests or any other test that does not require containers. CI MUST report these
+test classes as separate stages so a missing container runtime cannot mask unit-test results.
+
+**Rationale:** Containerized protocol tests improve reproducibility and isolation across FTP,
+FTPS, and SFTP, while keeping the unit-test feedback loop available on machines without a
+container runtime.
+
 ## Governance
 
 This constitution supersedes all other development practices. When guidance in other
@@ -205,4 +223,4 @@ an approved amendment. The constitution MUST be reviewed at least annually and w
 supported platforms, protocols, or technology stack change materially. Runtime development
 guidance lives in the repository's agent and contributor guidance files.
 
-**Version**: 1.2.0 | **Ratified**: 2026-11-05 | **Last Amended**: 2026-11-05
+**Version**: 1.3.0 | **Ratified**: 2026-11-05 | **Last Amended**: 2026-11-05

@@ -32,5 +32,6 @@
 ## Notes
 
 - Validation passed on the first iteration.
+- Revalidated on 2026-11-05 during `/speckit.specify 002-cli-mcp-support`; all items still pass and no `[NEEDS CLARIFICATION]` markers remain.
 - The specification aligns with the constitution's Automation & Integration principle: CLI and MCP are first-class, share the core, enforce security parity, are audited, and are covered by contract tests.
 - No `[NEEDS CLARIFICATION]` markers remain. Conservative defaults are recorded in the Assumptions section, including local-only MCP transport, headless operation, JSON output, and explicit per-client authorization.
