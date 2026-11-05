@@ -6,13 +6,13 @@
 
 ## Summary
 
-Build the initial Thriftp desktop client: a Rust core for connection management, local/remote browsing, streaming transfers, queue control, persistence, and security; protocol adapters for FTP, explicit/implicit FTPS, and SFTP; a Tauri 2 shell; and a Svelte/TypeScript dual-pane UI. The client supports saved connection profiles, server and directory favorites, secure OS credential storage, resumable transfers, pause/resume, queue pause/resume, global bandwidth limiting, prioritization, conflict resolution, native previews with fallback, tabs restored on launch, and persisted queue/history with interrupted-transfer recovery. The shared metadata store and credential abstraction introduced by the Server Favorites feature (`003`) are reused. Protocol integration tests use one Docker Compose harness shared by macOS Docker Desktop and Linux CI; Docker is a development/CI tool only and never an application runtime dependency. The plan resolves the specification's open decisions: accessibility targets WCAG 2.2 AA where applicable, and transfer history retains the 1,000 most recent records with a user-clear action.
+Build the initial Thriftp desktop client: a Rust core for connection management, local/remote browsing, streaming transfers, queue control, persistence, and security; protocol adapters for FTP, explicit/implicit FTPS, and SFTP; a Tauri 2 shell; and a Svelte/TypeScript dual-pane UI. The client supports saved connection profiles and directory favorites; server favorites are delivered by feature `003`. It also supports secure OS credential storage, resumable transfers, pause/resume, queue pause/resume, global bandwidth limiting, prioritization, conflict resolution, native previews with fallback, tabs restored on launch, and persisted queue/history with interrupted-transfer recovery. The shared metadata store and credential abstraction introduced by the Server Favorites feature (`003`) are reused. Protocol integration tests use one Docker Compose harness shared by macOS Docker Desktop and Linux CI; Docker is a development/CI tool only and never an application runtime dependency. The specification records the resolved product decisions: accessibility targets WCAG 2.2 AA where applicable, and transfer history retains the 1,000 most recent records with a user-clear action.
 
 ## Technical Context
 
 **Language/Version**: Rust stable (edition 2024, Rust 1.85.1 or newer); TypeScript 5.x; Svelte 5.x
 
-**Primary Dependencies**: Tauri 2.x; Tokio 1.x; `suppaftp` 12.x with `tokio-rustls-ring` for FTP/FTPS and the `deprecated` feature for implicit FTPS; `russh` and `russh-sftp` for SFTP; `rustls` with `rustls-native-certs`; `keyring`; `serde`/`serde_json`; `uuid`; `chrono`; `thiserror`; `tracing`; `zeroize`; `trash`; `criterion`; Svelte; Vite; Vitest with Testing Library; optional `tauri-driver` for end-to-end smoke tests
+**Primary Dependencies**: Tauri 2.x; Tokio 1.x; `suppaftp` 12.x with `native-tls` for FTP/FTPS and the `deprecated` feature for implicit FTPS; the accepted TLS-stack deviation is recorded in `docs/adr/0001-ftp-tls-stack.md`; `russh` and `russh-sftp` for SFTP; `keyring`; `serde`/`serde_json`; `uuid`; `chrono`; `thiserror`; `tracing`; `zeroize`; `trash`; `criterion`; Svelte; Vite; Vitest with Testing Library; optional `tauri-driver` for end-to-end smoke tests
 
 **Storage**: Shared metadata JSON (`favorites.json`, extended from `003`) for connection profiles, server favorites, directory favorites, preferences, and tab state; `transfers.json` for queue and capped transfer history with periodic checkpoints; passwords, private keys, and passphrases only in the native OS credential store through `CredentialStore`
 
@@ -104,6 +104,7 @@ apps/
     │   │       ├── queue.rs
     │   │       ├── favorites.rs
     │   │       ├── previews.rs
+    │   │       ├── inspector.rs
     │   │       └── preferences.rs
     │   └── Cargo.toml
     └── src/                     # Svelte UI
@@ -129,7 +130,7 @@ tests/
 └── e2e/                         # Optional desktop smoke tests
 ```
 
-**Structure Decision**: A Cargo workspace separates the Tauri-independent domain (`thriftp-core`) from protocol adapters (`thriftp-protocols`), the native credential-store adapter (`thriftp-credentials-keyring`), and storage (`thriftp-storage-json`). The Tauri shell is a thin IPC adapter; the Svelte UI owns presentation only. This satisfies the constitution's core-independence, protocol-isolation, and CLI/MCP-reuse requirements. The Server Favorites feature (`003`) is a slice of this architecture and reuses the same metadata store and credential abstraction.
+**Structure Decision**: A Cargo workspace separates the Tauri-independent domain (`thriftp-core`) from protocol adapters (`thriftp-protocols`), the native credential-store adapter (`thriftp-credentials-keyring`), and storage (`thriftp-storage-json`). The Tauri shell is a thin IPC adapter; the Svelte UI owns presentation only. This satisfies the constitution's core-independence, protocol-isolation, and CLI/MCP-reuse requirements. Server-favorite management remains owned by `003`; feature `001` exposes the shared connection-profile, credential, and storage interfaces it consumes.
 
 ## Phase 0: Research
 

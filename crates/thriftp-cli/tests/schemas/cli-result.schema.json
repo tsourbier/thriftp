@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Thriftp CLI result envelope",
+  "type": "object",
+  "required": ["schemaVersion", "command", "ok", "exitCode", "data", "warnings", "error", "meta"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "command": { "type": "string" },
+    "ok": { "type": "boolean" },
+    "exitCode": { "type": "integer" },
+    "data": { "type": ["object", "array", "string", "number", "boolean", "null"] },
+    "warnings": { "type": "array" },
+    "error": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "retryable": { "type": "boolean" },
+        "details": { "type": "object" }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["cliVersion", "automationContractVersion", "hostMode"]
+    }
+  }
+}

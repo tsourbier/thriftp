@@ -71,7 +71,7 @@ A grant contains:
 - granted directory scopes;
 - granted operations;
 - an optional absolute expiry;
-- an optional `disconnectPolicy` (`continue` or `cancel`, default `continue`);
+- a `disconnectPolicy` (`continue` or `cancel`, default `continue`);
 - optional pre-approval policies;
 - a revocation epoch that increments on revocation.
 
@@ -81,6 +81,7 @@ A grant contains:
 - A grant never grants a parent, sibling, or symlink target outside its scopes.
 - Effective capability is the intersection of grant operations and protocol capabilities. An operation the protocol cannot perform returns `unsupported_capability`.
 - Changing a grant increments its revision and invalidates sessions that authenticated under an older revision.
+- The CLI and desktop approval surfaces MUST expose the disconnect policy choice (`continue` default, `cancel` optional), and the chosen value MUST be stored on the grant and audited.
 - Expiry is evaluated on every request and at every file boundary.
 - Grants persist across restarts until revoked or expired.
 
@@ -178,7 +179,8 @@ No secret, token, private key, credential, raw server diagnostic, or full user h
 - If a record cannot be written, the operation returns `audit_unavailable` and does not execute.
 - Non-destructive failures also require a durable outcome record; if that write fails, the caller receives `audit_unavailable`, not success.
 - A broken hash chain is reported at startup and by `thriftp mcp audit verify`; it is never silently repaired.
-- Audit files use restrictive permissions and are not writable through any MCP tool.
+- Audit files use restrictive permissions and are not writable or deletable through any MCP tool. Same-user processes are outside the MCP authorization boundary; hash chaining makes their modifications detectable, and detection is reported rather than repaired.
+- Tests assert every documented field and inject record modification to verify tamper detection.
 
 ### Retention and storage limit
 
@@ -263,3 +265,4 @@ Headless deployments use the CLI as the user-controlled interface. No action req
 9. No secret appears in automation state, audit records, output, logs, or errors.
 10. MCP is disabled by default and can only be enabled by explicit user action.
 11. Concurrent standalone and embedded servers share one revisioned authorization state and one linear audit chain.
+12. Audit records are not writable or deletable through MCP tools and are tamper-evident against same-user modification.

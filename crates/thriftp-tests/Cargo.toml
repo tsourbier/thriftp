@@ -1,0 +1,77 @@
+[package]
+name = "thriftp-tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "thriftp_tests"
+path = "src/lib.rs"
+
+[[bin]]
+name = "host_worker"
+path = "src/bin/host_worker.rs"
+
+[[test]]
+name = "host_ownership"
+path = "tests/host/test_ownership.rs"
+
+[[test]]
+name = "host_host_loss"
+path = "tests/host/test_host_loss.rs"
+
+[[test]]
+name = "host_shared_state"
+path = "tests/host/test_shared_state.rs"
+
+[[test]]
+name = "host_equivalence"
+path = "tests/host/test_equivalence.rs"
+
+[[test]]
+name = "host_disconnect_policy"
+path = "tests/host/test_disconnect_policy.rs"
+
+[[test]]
+name = "security_secret_redaction"
+path = "tests/security/test_secret_redaction.rs"
+
+[[test]]
+name = "security_security_parity"
+path = "tests/security/test_security_parity.rs"
+
+[[test]]
+name = "security_panic_safety"
+path = "tests/security/test_panic_safety.rs"
+
+[[test]]
+name = "integration_large_listing"
+path = "tests/integration/test_large_listing.rs"
+
+[[test]]
+name = "cli_automation_smoke"
+path = "tests/cli/test_automation_smoke.rs"
+
+[[test]]
+name = "mcp_automation_smoke"
+path = "tests/mcp/test_automation_smoke.rs"
+
+[dependencies]
+thriftp-core = { path = "../thriftp-core" }
+thriftp-credentials-keyring = { path = "../thriftp-credentials-keyring" }
+thriftp-protocols = { path = "../thriftp-protocols" }
+thriftp-storage-json = { path = "../thriftp-storage-json" }
+chrono.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+base64.workspace = true
+ed25519-dalek.workspace = true
+
+[lints]
+workspace = true

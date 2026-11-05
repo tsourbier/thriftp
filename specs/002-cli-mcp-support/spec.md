@@ -15,7 +15,7 @@
 - Q: How should the MCP server run relative to the desktop application? → A: Support both a standalone headless server and an embedded in-app mode with identical authorization, audit, and security behavior.
 - Q: Should MCP authorization grants persist across restarts, or end with the current session? → A: Persist until revoked, with an optional expiry.
 - Q: What should happen by default when an MCP client requests a destructive operation? → A: Require confirmation for each destructive operation, with an opt-in pre-approval policy per grant.
-- Q: When a stored credential is unavailable, how should the CLI accept a secret? → A: Read it from standard input only; never from arguments or environment variables.
+- Q: When a stored credential is unavailable, how should the CLI accept a secret? → A: Read it from standard input only through an explicit stdin flag (`--password-stdin` or `--key-passphrase-stdin`); never from arguments, environment variables, or an implicit TTY prompt.
 - Q: How long should MCP audit records be retained? → A: 90 days by default, configurable by the user, with clear notice before deletion.
 
 ### Refinement Decisions (2026-11-05)
@@ -29,6 +29,10 @@
 - Q: Are CLI directory operations in scope? → A: Yes; the CLI must support creating, renaming, and deleting remote and local files and directories, with explicit confirmation for destructive operations.
 - Q: What are the CLI output stream conventions? → A: Machine-readable JSON goes to standard output, while progress and diagnostics go to standard error.
 - Q: Are favorites available through CLI or MCP? → A: No; favorites remain a desktop UI capability in the initial release.
+- Q: How should directory grants represent local operations? → A: Remote scopes are bound to a connection profile; local scopes are profile-independent canonical paths governing local upload sources and download destinations.
+- Q: How are audit records protected from MCP clients? → A: No MCP tool can modify or delete them; hash chaining makes same-user tampering detectable; deletion follows the retention and storage-limit notice rules.
+- Q: Which filesystem mutations do MCP directory tools expose? → A: Remote directory create, rename, and delete only; local scopes govern transfer endpoints, not directory mutation tools.
+- Q: How should audit storage limits and client disconnects be governed? → A: Use a configurable audit storage limit with notice and fail-closed behavior, and require each grant to define whether a transfer continues or is cancelled when its client disconnects, with the outcome audited.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -191,14 +195,14 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 - **FR-013**: The CLI MUST support browsing remote directories and displaying file metadata.
 - **FR-014**: The CLI MUST support creating, renaming, and deleting remote files and directories.
 - **FR-015**: The CLI MUST support creating, renaming, and deleting local files and directories.
-- **FR-016**: Destructive CLI operations MUST require an explicit confirmation flag and MUST NOT delete silently; local deletes MUST use the operating system trash when available, and remote deletes MUST warn that they are permanent.
+- **FR-016**: Destructive CLI operations MUST require an explicit confirmation: `--yes` for delete and rename-overwrite, or an explicit `--conflict overwrite` for transfer overwrite. They MUST NOT delete or overwrite silently. Local deletes MUST use the operating system trash when available, and remote deletes MUST warn that they are permanent.
 - **FR-017**: The CLI MUST support uploading and downloading individual files, multiple selected files, and directories recursively.
 - **FR-018**: The CLI MUST support querying transfer status, pausing, resuming, cancelling, configuring concurrency, setting a global bandwidth limit, and prioritizing or reordering queued transfers.
 - **FR-019**: When machine-readable output is requested, the CLI MUST write JSON to standard output and progress and diagnostics to standard error.
 - **FR-020**: The CLI MUST provide human-readable output and built-in help for every command.
 - **FR-021**: The CLI MUST use stable, documented exit codes that distinguish success, usage errors, authentication failures, network failures, permission failures, conflicts, and cancellations.
-- **FR-022**: The CLI MUST NOT accept secrets as command-line arguments or environment variables; when no stored credential exists, it MUST read the secret from standard input and MUST NOT print it in output, logs, or errors.
-- **FR-023**: When a required credential is unavailable from the credential store or standard input in a non-interactive run, the CLI MUST fail promptly with a clear message rather than wait for input.
+- **FR-022**: The CLI MUST NOT accept secrets as command-line arguments or environment variables; when no stored credential exists, it MUST read the secret from standard input through an explicit stdin mode flag (for example `--password-stdin` or `--key-passphrase-stdin`) and MUST NOT print it in output, logs, or errors. It MUST NOT prompt implicitly on a TTY.
+- **FR-023**: When a required credential is unavailable from the credential store or the explicit standard input mode in a non-interactive run, the CLI MUST fail promptly with a clear message rather than wait for input.
 - **FR-024**: The CLI MUST apply the same certificate and host-key verification rules as the desktop UI and MUST NOT offer a silent bypass.
 - **FR-025**: The CLI MUST support the same overwrite, skip, rename, and apply-to-all conflict policies as the desktop UI; without an explicit policy, a conflict MUST fail instead of overwriting silently.
 - **FR-026**: Recursive CLI transfers MUST preserve symbolic links when supported, skip them with a visible report otherwise, and MUST NOT follow them.
@@ -216,7 +220,7 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 
 **MCP Client Identity and Authorization**
 
-- **FR-035**: Every MCP client MUST have a stable, user-visible identity before it can request any capability.
+- **FR-035**: Every MCP client MUST have a stable, user-visible identity before it can request any operational capability. Bootstrap tools that submit an enrollment request or establish identity grant no operational capability and are exempt from this rule.
 - **FR-036**: MCP client enrollment MUST require explicit user approval through a user-controlled interface, including a CLI or desktop control surface for headless operation.
 - **FR-037**: Authorization grants MUST be bound to a specific client identity and MUST NOT be usable by another client.
 - **FR-038**: Grants MUST restrict access to specific connection profiles, directories, and permitted operations.
@@ -230,7 +234,7 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 
 **MCP Directory Scope Enforcement**
 
-- **FR-046**: Directory grants MUST be expressed as canonical paths associated with a connection profile.
+- **FR-046**: Directory grants MUST be expressed as canonical paths. Remote grants MUST be associated with a connection profile; local grants are profile-independent canonical paths that govern local upload sources and download destinations.
 - **FR-047**: Every MCP operation MUST resolve and canonicalize the requested path and verify that it is contained within the granted scope before performing the operation.
 - **FR-048**: MCP MUST deny traversal sequences, alternate path separators, encoded traversal, and equivalent path-manipulation techniques that escape the granted scope.
 - **FR-049**: MCP MUST NOT follow symbolic links that resolve outside the granted scope and MUST report the denial.
@@ -250,14 +254,14 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 - **FR-057**: Every MCP operation, including denied, blocked, and failed attempts, MUST produce an audit record.
 - **FR-058**: Audit records MUST include the timestamp, client identity, interface, operation, target, result, and redacted error context, and MUST NOT contain secrets.
 - **FR-059**: Audit records MUST be retained for 90 days by default, with a user-configurable retention period and clear notice before deletion.
-- **FR-060**: Audit records MUST be protected from modification or deletion by MCP clients and MUST NOT be removed before the configured retention period without explicit user action.
+- **FR-060**: Audit records MUST be protected from modification or deletion through MCP tools and MUST be tamper-evident against same-user modification (for example, through hash chaining). They MUST NOT be removed before the configured retention period without explicit user action, and any detected tampering MUST be reported without silent repair.
 - **FR-061**: If the audit record cannot be durably written, all MCP operations MUST fail closed; there is no read-only exception.
 - **FR-062**: Destructive MCP operations MUST never proceed without a durable audit record, even if other operations are treated differently by a future amendment.
 - **FR-063**: Audit failure, retention deletion, and revocation events MUST themselves be recorded where the audit system remains writable.
 
 **MCP Tools and Capabilities**
 
-- **FR-064**: The MCP server MUST expose tools for listing connections, browsing directories, inspecting files, uploading, downloading, creating, renaming, deleting, querying transfer status, pausing, resuming, cancelling, setting a global bandwidth limit, and prioritizing or reordering transfers.
+- **FR-064**: The MCP server MUST expose tools for listing connections, browsing remote directories, inspecting files, uploading, downloading, creating, renaming, and deleting remote files and directories, querying transfer status, pausing, resuming, cancelling, setting a global bandwidth limit, and prioritizing or reordering transfers. Local scopes govern upload sources and download destinations, not directory mutation tools.
 - **FR-065**: The MCP server MUST publish its available tools, input and output shapes, and interface version to enrolled clients before their first operation.
 - **FR-066**: MCP errors MUST be actionable and MUST distinguish authorization, validation, conflict, network, and internal failures.
 - **FR-067**: MCP MUST NOT expose favorites management, arbitrary shell commands, or server-administration tools in the initial release.
@@ -280,19 +284,23 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 - **FR-078**: Breaking changes to either interface MUST follow the project's versioning and amendment process.
 - **FR-079**: The documentation MUST state the transfer process model, including whether transfers continue after the CLI exits and how desktop, CLI, and MCP observe shared transfer state.
 - **FR-080**: The documentation MUST state how MCP clients enroll, how grants are scoped and revoked, and what happens when confirmation or audit logging is unavailable.
+- **FR-081**: The audit store MUST have a configurable storage limit. When the limit is reached, only sealed segments may be deleted after the configured notice; if no safe deletion is possible, all MCP operations MUST fail closed with `audit_unavailable`.
+- **FR-082**: Each MCP grant MUST define whether an in-progress transfer continues or is cancelled when its client disconnects, with `continue` as the default. The CLI and desktop approval surfaces MUST let the user choose the policy, and the resulting outcome MUST be audited.
+- **FR-083**: Both interfaces MUST clearly communicate plain FTP's lack of transport encryption before and during use, including browse, stat, upload, download, transfer-status, and transfer-list results. Human-readable output MUST warn on standard error, and machine-readable output MUST include an `unencrypted_transport` warning in JSON and MCP results.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Automation Interface**: A first-class non-UI surface, either the CLI or the MCP server, with a version, capabilities, and documentation.
 - **CLI Command**: A documented invocation with arguments, options, output modes, exit codes, and a structured result schema.
 - **CLI Invocation Result**: The outcome of a command, including exit code, structured JSON result, diagnostics, duration, and affected targets.
-- **CLI Transfer Session**: The lifecycle of a CLI-initiated transfer, including whether the CLI process owns it, whether it is shared, and its resulting interrupted, completed, or cancelled state.
-- **MCP Client**: An enrolled AI agent or tool with a stable identity, display name, credential reference, enrollment state, sessions, and grants.
+- **CLI Transfer Session**: The lifecycle of a CLI-initiated transfer, represented by the owning transfer host plus the existing Transfer record. It includes whether the CLI process owns it, whether it is shared, and its resulting interrupted, completed, or cancelled state.
+- **MCP Client**: An enrolled AI agent or tool with a stable identity, display name, credential reference (the Ed25519 public-key fingerprint), enrollment state, sessions, and grants.
 - **Enrollment Request**: A pending request from an MCP client for a user-approved identity and initial scope.
 - **MCP Tool**: A documented operation exposed to authorized clients, with a purpose, input shape, output shape, and destructive-action flag.
 - **Authorization Grant**: A user-approved scope that binds a specific MCP client to connection profiles, canonical directories, and permitted operations, with an optional expiration and a revoked, expired, or active state.
 - **Approval Policy**: An opt-in rule within a grant that pre-approves specific destructive operations, with a defined scope, an audit requirement, and a revocation state.
-- **Directory Scope**: A canonical directory path associated with a connection profile, used to validate every MCP path request.
+- **Directory Scope**: A canonical directory path used to validate every MCP path request. Remote scopes are associated with a connection profile; local scopes are profile-independent and govern local upload sources and download destinations.
+- **Transfer Host**: The single process that owns transfer execution and exposes the shared queue, progress, and control state to the desktop application, CLI, and MCP server.
 - **MCP Session**: The lifetime of a client connection, including its runtime mode (standalone or embedded), grants, activity, and audit sequence.
 - **Audit Event**: An immutable record of an automation operation, including timestamp, client identity, interface, operation, target, result, redacted error context, and retention status.
 - **Connection Profile**: An existing saved server configuration reused by both interfaces.
@@ -303,6 +311,7 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 - Remote MCP access over public networks; the initial release is local-only.
 - An always-running background transfer daemon or service; the process model is an architectural decision for planning.
 - A terminal user interface or interactive CLI shell.
+- Local directory create, rename, and delete tools through MCP; local scopes are used only for upload sources and download destinations.
 - Favorites management through CLI or MCP; favorites remain a desktop UI capability.
 - Plugins or third-party extensions for either interface.
 - Arbitrary shell or server-administration tools exposed through MCP.
@@ -344,6 +353,8 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 - **SC-023**: A CLI transfer command remains active until a terminal state by default, and an early process exit produces an interrupted, resumable transfer in 100% of tests.
 - **SC-024**: When the desktop application, CLI, and MCP server are running, they report the same state for the same active transfer in 100% of tests.
 - **SC-025**: 100% of CLI directory create, rename, and delete operations require explicit confirmation for destructive actions and never delete silently.
+- **SC-026**: 100% of plain FTP sessions through the CLI and MCP display an unencrypted-transport warning before and during use.
+- **SC-027**: 100% of audit tamper tests detect and report modification without silently repairing the hash chain.
 
 ## Assumptions
 
@@ -356,9 +367,10 @@ A user starts a CLI transfer, closes the terminal or interrupts the command, and
 - Destructive MCP operations require per-operation confirmation by default; pre-approval policies are opt-in, scoped, and audited.
 - The MCP implementation follows the Model Context Protocol and documents the supported protocol version.
 - CLI and MCP operations share the same connection profiles and transfer state as the desktop application; favorites remain desktop-only.
+- Remote directory grants are bound to a connection profile, while local grants are profile-independent canonical paths for upload sources and download destinations.
 - The initial CLI covers connection management, browsing, directory operations, transfers, and queue control; it does not provide an interactive shell.
-- Audit records are stored locally, retained for 90 days by default, and configurable by the user; they are not transmitted to a remote service.
+- Audit records are stored locally, retained for 90 days by default, and configurable by the user, with a configurable storage limit; they are not transmitted to a remote service.
 - All MCP operations fail closed when audit logging is unavailable; there is no read-only exception in the initial release.
-- Authentication secrets are read from standard input or retrieved from the operating system credential store, never from command-line arguments or environment variables.
+- Authentication secrets are read from standard input through an explicit stdin mode or retrieved from the operating system credential store, never from command-line arguments, environment variables, or an implicit TTY prompt.
 - The initial release does not require an always-running background daemon; the shared-state mechanism and its fallback behavior are architectural decisions for planning.
 - Technology and process architecture choices are deferred to the planning phase; this specification defines observable behavior only.

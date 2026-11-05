@@ -5,8 +5,8 @@
 ## Entity Overview
 
 ```text
-ConnectionProfile 1 ─── 1 ServerFavorite
 ConnectionProfile 1 ─── 0..* DirectoryFavorite
+ConnectionProfile 1 ─── 0..1 ServerFavorite (defined in 003)
 ConnectionProfile 1 ─── 0..* BrowsingSession/Tab
 ConnectionProfile 0..* ─── 0..* CredentialRef
 CredentialRef 0..1 ─── 1 Credential (OS credential store)
@@ -22,7 +22,7 @@ ConnectionProfile 0..* ─── 0..* ActiveConnection (runtime)
 
 ### ConnectionProfile
 
-The saved server configuration shared with the Server Favorites feature.
+A saved configuration for reaching a server. This feature extends its use but does not create a parallel model.
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
@@ -41,20 +41,9 @@ The saved server configuration shared with the Server Favorites feature.
 
 **Rules**: FTP/FTPS require password authentication; SFTP supports password and private-key authentication. No secret is stored in the profile.
 
-### ServerFavorite
+### ServerFavorite (owned by `003`)
 
-The favorites-facing record for a saved server. Every Connection Profile has exactly one Server Favorite.
-
-| Field | Type | Required | Notes |
-|-------|------|----------|-------|
-| `id` | UUID | Yes | Stable identifier |
-| `connectionProfileId` | UUID | Yes | Unique |
-| `pinned` | boolean | Yes | Presentation only |
-| `lastUsedAt` | timestamp or null | No | Most recent successful connection |
-| `credentialPolicy` | enum | Yes | `save` or `ask` |
-| `credentialRefId` | UUID or null | Conditional | Required when policy is `save` |
-| `createdAt` | timestamp | Yes | UTC |
-| `updatedAt` | timestamp | Yes | UTC |
+Server favorites are defined in `specs/003-server-favorites/data-model.md`. Feature `001` provides the shared `ConnectionProfile` and `CredentialRef` interfaces they use, but does not redefine the server-favorite record.
 
 ### DirectoryFavorite
 
@@ -255,7 +244,6 @@ A singleton persisted structure.
 {
   "schemaVersion": 1,
   "connectionProfiles": [],
-  "favorites": [],
   "directoryFavorites": [],
   "credentialRefs": [],
   "preferences": {},
@@ -263,7 +251,7 @@ A singleton persisted structure.
 }
 ```
 
-The `favorites` array holds Server Favorite records, matching the schema introduced by `003`.
+Feature `003` extends this document with its `favorites` array for server favorites.
 
 ### `transfers.json`
 
@@ -329,7 +317,7 @@ Connecting → Error
 ## Invariants
 
 1. No secret appears in `favorites.json`, `transfers.json`, logs, errors, crash reports, or telemetry.
-2. Every Connection Profile has exactly one Server Favorite.
+2. Directory favorite paths are unique per Connection Profile; server-favorite uniqueness is defined by `003`.
 3. Every Transfer belongs to a valid queue entry; history entries do not occupy queue slots.
 4. Pending queue order is unique and deterministic.
 5. History contains at most 1,000 records.

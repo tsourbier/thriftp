@@ -1,0 +1,32 @@
+[package]
+name = "thriftp-protocols"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+base64.workspace = true
+chrono.workspace = true
+native-tls = "0.2"
+russh.workspace = true
+russh-sftp.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+suppaftp.workspace = true
+thriftp-core = { path = "../thriftp-core" }
+tokio.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "parsing"
+harness = false
+
+[lints]
+workspace = true

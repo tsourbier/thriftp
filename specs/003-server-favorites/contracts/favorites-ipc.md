@@ -58,12 +58,15 @@ ServerFavoriteView = {
   port: number
   username: string
   authMethod: AuthMethod
+  timeoutSeconds: number
+  sshKeyRef?: string | null
   pinned: boolean
   lastUsedAt: string | null
   credentialPolicy: CredentialPolicy
   hasSavedCredential: boolean
   createdAt: string
   updatedAt: string
+  credentialWarning?: { code: string; message: string }
 }
 
 FavoritePreferences = {

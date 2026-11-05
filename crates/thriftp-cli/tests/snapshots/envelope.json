@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "envelopeKeys": [
+    "schemaVersion",
+    "command",
+    "ok",
+    "exitCode",
+    "data",
+    "warnings",
+    "error",
+    "meta"
+  ],
+  "errorKeys": ["code", "message", "retryable", "details"],
+  "metaKeys": [
+    "cliVersion",
+    "automationContractVersion",
+    "mcpProtocolVersions",
+    "hostMode"
+  ]
+}

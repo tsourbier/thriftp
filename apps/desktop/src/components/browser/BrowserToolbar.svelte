@@ -1,0 +1,122 @@
+<script lang="ts">
+  import { untrack } from "svelte";
+  import type { SortKey } from "../../lib/ipc/types";
+
+  let {
+    path,
+    sortKey = $bindable("name"),
+    showHidden = $bindable(false),
+    filter = $bindable(""),
+    canGoUp = true,
+    canGoBack = false,
+    canGoForward = false,
+    loading = false,
+    onnavigate,
+    onup,
+    onback,
+    onforward,
+    onrefresh,
+    onsort
+  }: {
+    path: string;
+    sortKey?: SortKey;
+    showHidden?: boolean;
+    filter?: string;
+    canGoUp?: boolean;
+    canGoBack?: boolean;
+    canGoForward?: boolean;
+    loading?: boolean;
+    onnavigate: (path: string) => void;
+    onup: () => void;
+    onback: () => void;
+    onforward: () => void;
+    onrefresh: () => void;
+    onsort: (key: SortKey) => void;
+  } = $props();
+
+  let draft = $state(untrack(() => path));
+
+  $effect(() => {
+    draft = path;
+  });
+
+  function submit(event: SubmitEvent) {
+    event.preventDefault();
+    onnavigate(draft.trim());
+  }
+
+  function changeSort(event: Event) {
+    const key = (event.currentTarget as HTMLSelectElement).value as SortKey;
+    sortKey = key;
+    onsort(key);
+  }
+</script>
+
+<form class="toolbar" onsubmit={submit} aria-label="Browser controls">
+  <button type="button" onclick={onback} disabled={!canGoBack} title="Back">←</button>
+  <button type="button" onclick={onforward} disabled={!canGoForward} title="Forward"
+    >→</button
+  >
+  <button type="button" onclick={onup} disabled={!canGoUp} title="Parent directory"
+    >↑</button
+  >
+  <button type="button" onclick={onrefresh} disabled={loading} title="Refresh">⟳</button>
+  <input
+    class="location"
+    bind:value={draft}
+    aria-label="Current path"
+    spellcheck="false"
+    autocomplete="off"
+  />
+  <input
+    class="filter"
+    bind:value={filter}
+    placeholder="Filter"
+    aria-label="Filter entries"
+    autocomplete="off"
+  />
+  <label class="inline">
+    Sort
+    <select value={sortKey} onchange={changeSort} aria-label="Sort entries">
+      <option value="name">Name</option>
+      <option value="size">Size</option>
+      <option value="date">Date</option>
+      <option value="type">Type</option>
+    </select>
+  </label>
+  <label class="inline">
+    <input type="checkbox" bind:checked={showHidden} />
+    Hidden
+  </label>
+  <button type="submit">Go</button>
+</form>
+
+<style>
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.5rem;
+  }
+  .location {
+    flex: 1 1 12rem;
+    min-width: 8rem;
+    padding: 0.25rem;
+    font: inherit;
+  }
+  .filter {
+    flex: 0 1 8rem;
+    padding: 0.25rem;
+    font: inherit;
+  }
+  .inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+  button {
+    font: inherit;
+  }
+</style>

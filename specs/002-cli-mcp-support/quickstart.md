@@ -152,7 +152,7 @@ thriftp --json transfer list
 1. On a fresh test data directory, start the standalone MCP server and attempt `thriftp.automation.status` and an operational tool call.
 2. Attempt to configure a wildcard or non-loopback bind through the embedded-mode test configuration surface.
 
-**Expected**: Status reports `mcpEnabled: false`. Operational calls return `mcp_disabled`. No TCP port is opened in standalone mode. The embedded mode refuses wildcard and non-loopback binds. MCP cannot be enabled implicitly.
+**Expected**: Status reports `mcpEnabled: false`. Operational calls return `mcp_disabled`. No TCP port is opened in standalone mode. The embedded mode refuses wildcard and non-loopback binds. A request carrying a non-loopback `Host` or `Origin` is rejected and audited. MCP cannot be enabled implicitly.
 
 ## Scenario 7: MCP enrollment, authorization, and tools
 
@@ -171,7 +171,7 @@ thriftp mcp clients pending
 thriftp mcp clients approve <request-id> \
   --profile test-server --dir test-server:/upload --local-dir ./fixtures \
   --operations connections.list,browse.list,files.stat,transfers.upload,transfers.download,transfers.status \
-  --yes
+  --disconnect-policy cancel --yes
 ```
 
 4. In the client, complete `challenge` and `authenticate`, then call `thriftp.connections.list`, `thriftp.browse.list` for `/upload`, upload a file, and poll `thriftp.transfers.status`.
@@ -211,6 +211,7 @@ thriftp mcp clients revoke <client-fingerprint> --yes
 
 3. Attempt another operation and re-authenticate.
 4. Repeat with a grant that expires during an operation.
+5. Approve one grant with `--disconnect-policy continue` and another with `cancel`; start a transfer in each and disconnect the client.
 
 **Expected**:
 - Active sessions terminate.
@@ -218,6 +219,7 @@ thriftp mcp clients revoke <client-fingerprint> --yes
 - The next call returns `grant_revoked` or `grant_expired`.
 - Re-authentication fails until a new explicit approval creates a new grant.
 - Queued work under the revoked grant does not execute.
+- The `continue` grant keeps the transfer running after disconnect; the `cancel` grant cancels it; both outcomes are audited.
 
 ## Scenario 10: Audit, integrity, and fail-closed behavior
 
@@ -272,6 +274,20 @@ From a clean environment, follow `docs/cli.md` and `docs/mcp.md` without reading
 - A new integrator completes a minimal MCP enrollment and transfer in under 10 minutes.
 - Commands, options, exit codes, output streams, tools, schemas, enrollment, grants, audit, and the transfer process model are all documented.
 
+## Scenario 14: Plain FTP warnings and security parity
+
+1. Create a plain FTP profile and run `profiles test`, `browse`, and a transfer through the CLI.
+2. Call the same operations through MCP for the same profile.
+3. Attempt an FTPS connection with an invalid certificate and an SFTP connection with an unknown or changed host key.
+4. Attempt an operation that exceeds OS filesystem permissions.
+
+**Expected**:
+- Every plain FTP CLI session prints a visible unencrypted-transport warning to stderr before and during use.
+- JSON and MCP results include `unencryptedTransport: true` and warning code `unencrypted_transport`.
+- The FTPS and SFTP attempts fail without a silent certificate or host-key bypass; the SSH override requires the exact fingerprint and `--yes`.
+- Permission-denied operations return the documented permission error and never report success.
+- Credential-store failures fail closed with no plaintext fallback.
+
 ## Automated Validation
 
 Test classes are separated by runtime requirements:
@@ -293,8 +309,17 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p thriftp-cli --test contract
 cargo test -p thriftp-mcp --test contract
-cargo test -p thriftp-core --test host
+cargo test -p thriftp-mcp --test contract_parity
+cargo test -p thriftp-mcp --test contract_security
+cargo test -p thriftp-mcp --test contract_approvals
+cargo test -p thriftp-mcp --test contract_disconnect
+cargo test -p thriftp-tests
 cargo test -p thriftp-core --test automation
+cargo test -p thriftp-core --test approval_confirmations
+cargo test -p thriftp-core --test audit_integrity
+cargo test -p thriftp-cli --test security_parity
+cargo test -p thriftp-cli --test plain_ftp_warning
+cargo test -p thriftp-mcp --test plain_ftp_warning
 ```
 
 Run the containerized protocol integration suite separately:

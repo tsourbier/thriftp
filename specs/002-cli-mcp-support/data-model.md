@@ -65,7 +65,7 @@ A stable, user-visible automation client identity.
 | `createdAt` | timestamp | Yes | UTC |
 | `updatedAt` | timestamp | Yes | UTC |
 
-**Rules**: The fingerprint is the authorization identity; the display name is presentation only. A public key maps to exactly one client. Revoking a client revokes all of its grants and terminates all sessions. A revoked client may re-enroll only through a new explicit approval, and the new grant is recorded separately.
+**Rules**: The fingerprint is the authorization identity and the client credential reference; the public key is the proof-of-possession material. The display name is presentation only. A public key maps to exactly one client. Revoking a client revokes all of its grants and terminates all sessions. A revoked client may re-enroll only through a new explicit approval, and the new grant is recorded separately.
 
 ### EnrollmentRequest
 
@@ -237,7 +237,7 @@ An immutable record of an automation operation.
 | `ownedTransferIds` | UUID[] | Transfers currently executed by this host |
 | `state` | enum | `acquiring`, `owner`, `releasing`, `released`, `lost` |
 
-**Rules**: Exactly one host owns the lock. The token is never logged or written in plaintext outside the restricted runtime file. A host that cannot renew or serve its endpoint is treated as lost. Runtime files are removed on clean shutdown and cleaned up when stale.
+**Rules**: Exactly one host owns the lock. A CLI Transfer Session is represented by the owning `TransferHost` plus the existing `Transfer` record; it is not a separate persisted entity. The token is never logged or written in plaintext outside the restricted runtime file. A host that cannot renew or serve its endpoint is treated as lost. Runtime files are removed on clean shutdown and cleaned up when stale.
 
 ### HostControlClient (runtime only)
 
@@ -429,3 +429,5 @@ Open → Sealed → NoticePending → Deleted
 13. CLI JSON mode writes exactly one result document to stdout; progress and diagnostics go to stderr.
 14. A grant's scope never implies a parent, sibling, or symlink target outside its canonical paths.
 15. Audit hash-chain breaks are reported, not silently repaired.
+16. Audit records are not writable or deletable through MCP tools and are tamper-evident against same-user modification.
+17. Remote directory mutation tools never accept local paths; local scopes govern upload sources and download destinations.

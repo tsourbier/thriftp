@@ -1,0 +1,194 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fetch --locked
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace --locked
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+        working-directory: apps/desktop
+      - run: npm run lint
+        working-directory: apps/desktop
+      - run: npm run format
+        working-directory: apps/desktop
+      - run: npm test
+        working-directory: apps/desktop
+      - run: npm run build
+        working-directory: apps/desktop
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev
+      - run: cargo test --locked
+        working-directory: apps/desktop/src-tauri
+
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p thriftp-cli --tests --locked
+      - run: cargo test -p thriftp-mcp --tests --locked
+      - run: cargo test -p thriftp-core --test automation --test audit_fail_closed --test approval_confirmations --locked
+      - run: cargo test -p thriftp-storage-json --test audit_retention --locked
+
+  multi-process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p thriftp-tests --locked
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p thriftp-tests --test security_secret_redaction --test security_security_parity --test security_panic_safety --locked
+
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p thriftp-core host::tests --locked
+
+  server-favorites:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p thriftp-core --test server_favorites --test server_favorites_create --test server_favorites_organize --test server_favorites_connect --test server_favorites_credentials --test server_favorites_edit --test server_favorites_performance --locked
+      - run: cargo test -p thriftp-storage-json --test server_favorites_store --locked
+      - run: cargo test -p thriftp-credentials-keyring --test credential_store --locked
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --test server_favorites_create --test server_favorites_commands
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p thriftp-core -p thriftp-storage-json -p thriftp-credentials-keyring
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --no-deps
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+        working-directory: apps/desktop
+      - run: npm test -- --run src/components/server-favorites
+        working-directory: apps/desktop
+
+  protocol-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/test-integration.sh
+
+  platform:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --tests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+        working-directory: apps/desktop
+      - run: npm test
+        working-directory: apps/desktop
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit
+      - run: cargo install cargo-license --locked
+      - run: scripts/check-licenses.sh
+
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-cyclonedx --locked
+      - run: scripts/generate-sbom.sh target/sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: target/sbom.json
+
+  build:
+    needs: [unit, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace --release --locked
+
+  reproducible:
+    needs: [unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: scripts/verify-reproducible-build.sh

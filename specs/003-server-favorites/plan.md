@@ -16,7 +16,7 @@ Implement a desktop-only Server Favorites Manager on top of the existing connect
 
 **Storage**: Versioned JSON document for non-secret favorites, groups, preferences, and credential-reference metadata in the OS application-data directory, written atomically with restrictive permissions; passwords, private keys, and passphrases only in the OS credential store (macOS Keychain, Windows Credential Manager, Linux Secret Service)
 
-**Testing**: `cargo test` for Docker-free core unit and integration tests using fake credential and repository implementations; Tauri command tests; Vitest component tests; platform-specific native credential-store smoke tests; cross-platform CI matrix; no protocol-server integration tests in this feature; shared `001` containerized protocol integration tests remain a separate CI stage
+**Testing**: `cargo test` for Docker-free core unit and integration tests using fake credential and repository implementations; persistence tests for atomic writes, backup recovery, migrations, and corrupt documents; certificate, SSH host-key, and missing/moved SSH key-file failure tests on the favorite connect and edit paths; Tauri command tests; Vitest component tests including a keyboard-only end-to-end workflow; platform-specific native credential-store smoke tests; cross-platform CI matrix; no protocol-server integration tests in this feature; shared `001` containerized protocol integration tests remain a separate CI stage
 
 **Target Platform**: macOS, Linux, and Windows desktop
 
@@ -69,24 +69,28 @@ Cargo.toml                       # Cargo workspace
 crates/
 ├── thriftp-core/                # Domain and application logic; no Tauri dependency
 │   ├── src/
-│   │   ├── favorites/
+│   │   ├── model/
+│   │   │   ├── server_favorite.rs  # New: ServerFavorite and FavoritePreferences
+│   │   │   └── ... existing models
+│   │   ├── server_favorites/    # New: server favorites; existing favorites.rs stays directory favorites
 │   │   │   ├── mod.rs
-│   │   │   ├── model.rs
 │   │   │   ├── repository.rs
+│   │   │   ├── sorting.rs
 │   │   │   └── service.rs
 │   │   ├── credentials/
 │   │   │   ├── mod.rs
-│   │   │   ├── model.rs
+│   │   │   ├── traits.rs
 │   │   │   └── service.rs
 │   │   └── connections/
 │   │       ├── mod.rs
-│   │       ├── model.rs
 │   │       └── service.rs
 │   └── tests/
 ├── thriftp-credentials-keyring/ # CredentialStore adapter for native OS stores
 │   └── src/lib.rs
 └── thriftp-storage-json/        # FavoritesRepository adapter for versioned JSON
-    └── src/lib.rs
+    └── src/
+        ├── lib.rs
+        └── server_favorites.rs
 
 apps/
 └── desktop/
@@ -95,22 +99,22 @@ apps/
     │   │   ├── main.rs
     │   │   ├── lib.rs
     │   │   └── commands/
-    │   │       ├── favorites.rs
+    │   │       ├── server_favorites.rs
     │   │       ├── credentials.rs
     │   │       └── connections.rs
     │   └── Cargo.toml
     └── src/                     # Svelte UI
         ├── lib/
-        │   └── favorites/
+        │   └── server-favorites/
         │       ├── api.ts
         │       ├── stores.ts
         │       └── types.ts
         ├── components/
-        │   └── favorites/
+        │   └── server-favorites/
         └── routes/
 ```
 
-**Structure Decision**: A Cargo workspace separates the Tauri-independent domain (`thriftp-core`) from platform adapters (`thriftp-credentials-keyring`, `thriftp-storage-json`) and the desktop shell (`apps/desktop`). Tauri commands are thin adapters that translate IPC requests into core service calls. This keeps the core testable and reusable by future CLI/MCP interfaces, as required by the constitution and the CLI/MCP specification.
+**Structure Decision**: A Cargo workspace separates the Tauri-independent domain (`thriftp-core`) from platform adapters (`thriftp-credentials-keyring`, `thriftp-storage-json`) and the desktop shell (`apps/desktop`). Tauri commands are thin adapters that translate IPC requests into core service calls. This keeps the core testable and reusable by future CLI/MCP interfaces, as required by the constitution and the CLI/MCP specification. Server favorites use `server_favorites` and `server-favorites` namespaces; the existing `favorites.rs`, `commands/favorites.rs`, and `components/favorites/` remain the directory-favorites implementation and must not be repurposed.
 
 ## Phase 0: Research
 
@@ -128,7 +132,7 @@ All technical unknowns are resolved in [research.md](./research.md).
 Re-evaluated after Phase 1 design:
 
 - **Core independence**: `thriftp-core` owns models, validation, sorting, credential-reference rules, and services; Tauri commands remain thin adapters.
-- **Security**: Credentials are held only in the native OS store through `CredentialStore`; no secret is serializable, logged, returned to the UI, or written to JSON. Store failures fail closed.
+- **Security**: Credentials are held only in the native OS store through `CredentialStore`; no secret is serializable, logged, returned to the UI, or written to JSON. Store failures fail closed. Favorite connections retain the same certificate and SSH host-key verification rules as any other connection.
 - **Privacy**: No telemetry or cloud transmission is introduced.
 - **Quality**: Docker-free contract tests, adapter tests, IPC tests, and cross-platform CI are defined; the shared `001` containerized protocol integration suite is a separate stage and is not required by this feature.
 - **Containerized integration testing**: This feature's tests require no container runtime; Docker is never an application runtime dependency.

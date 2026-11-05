@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Thriftp MCP tool catalog",
+  "type": "object",
+  "required": ["tools"],
+  "properties": {
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "inputSchema"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^thriftp\\." },
+          "description": { "type": "string" },
+          "inputSchema": { "type": "object" }
+        }
+      }
+    }
+  }
+}

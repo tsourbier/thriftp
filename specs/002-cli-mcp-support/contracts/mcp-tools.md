@@ -57,6 +57,8 @@ All operational tools require an active session. Tool names are stable and names
 | `thriftp.connections.list` | none | Granted profiles: ID, display name, protocol, host, port; never credentials | No |
 | `thriftp.connections.get` | `profileId` | One granted profile without secrets | No |
 
+**Rules**: For a plain FTP profile, the result includes `unencryptedTransport: true` and a warning code `unencrypted_transport`. The warning is repeated in browse, stat, transfer-list, transfer-status, upload, and download results for that profile. It is never suppressed by JSON output or by an MCP mode.
+
 ### Browsing and Metadata
 
 | Tool | Input | Output | Destructive |
@@ -72,6 +74,8 @@ All operational tools require an active session. Tool names are stable and names
 | `thriftp.directories.rename` | `profileId`, `fromPath`, `toPath`, `overwrite?` | New canonical path | Yes when the destination exists |
 | `thriftp.directories.delete` | `profileId`, `path`, `recursive?` | Deleted path and affected count | Yes |
 | `thriftp.files.delete` | `profileId`, `path` | Deleted path | Yes |
+
+**Rules**: Directory and file mutation tools operate on remote paths only. Local scopes govern upload sources and download destinations; they do not expose local create, rename, or delete tools. A local path supplied to a mutation tool returns `invalid_argument` or `scope_denied`.
 
 ### Transfers
 
@@ -212,3 +216,5 @@ Denials and blocks are audited with `result: denied` or `result: blocked`. Revoc
 8. Favorites, shell commands, server administration, and audit modification are never exposed.
 9. Unsupported protocol revisions receive a clear compatibility error.
 10. A client disconnect follows the grant's disconnect policy and is audited.
+11. Directory and file mutation tools operate on remote paths only; local scopes govern upload sources and download destinations.
+12. Plain FTP profiles always include an unencrypted-transport warning in results.

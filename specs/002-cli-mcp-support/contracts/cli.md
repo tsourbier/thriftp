@@ -40,7 +40,7 @@ thriftp profiles trust-host-key <id-or-name> --fingerprint <sha256> --yes
 thriftp profiles forget-host-key <id-or-name> --yes
 ```
 
-**Rules**: `--key-file` names a private-key path; it is not secret material. Secret values come only from standard input through the explicit stdin flags. `profiles delete` removes the profile and its credential reference only when no other favorite references it, and requires `--yes`. If a desktop favorite references the profile, deletion warns that the favorite will become unavailable and requires explicit confirmation; it never deletes a favorite silently. `profiles test` verifies connectivity and certificate or host-key rules without transferring data. Certificate validation is never bypassed from the CLI. A new or changed SSH host key fails the connection; `profiles trust-host-key` is the only override, requires the exact fingerprint, displays the fingerprint and a warning, and requires `--yes`. `profiles forget-host-key` removes a trusted key. Neither command is implied by any other option.
+**Rules**: `--key-file` names a private-key path; it is not secret material. Secret values come only from standard input through the explicit stdin flags. `profiles delete` removes the profile and its credential reference only when no other favorite references it, and requires `--yes`. If a desktop favorite references the profile, deletion warns that the favorite will become unavailable and requires explicit confirmation; it never deletes a favorite silently. `profiles test` verifies connectivity and certificate or host-key rules without transferring data. Certificate validation is never bypassed from the CLI. A new or changed SSH host key fails the connection; `profiles trust-host-key` is the only override, requires the exact fingerprint, displays the fingerprint and a warning, and requires `--yes`. `profiles forget-host-key` removes a trusted key. Neither command is implied by any other option. Plain FTP profiles MUST print a visible unencrypted-transport warning to stderr before and during the session; JSON output includes warning code `unencrypted_transport`.
 
 ### Browsing and Metadata
 
@@ -50,7 +50,7 @@ thriftp browse <path> [--profile <id-or-name>] [--all] [--long]
 thriftp stat <path> [--profile <id-or-name>] [--local]
 ```
 
-**Rules**: `browse` streams entries and supports cursor pagination for large directories. `--all` includes hidden entries. `--long` adds size, modification time, permissions, ownership, and link target when available. `--local` targets the local filesystem and does not require a profile. The result includes the canonical path, entry count when known, and a next cursor when more entries exist.
+**Rules**: `browse` streams entries and supports cursor pagination for large directories. `--all` includes hidden entries. `--long` adds size, modification time, permissions, ownership, and link target when available. `--local` targets the local filesystem and does not require a profile. The result includes the canonical path, entry count when known, and a next cursor when more entries exist. When the selected profile uses plain FTP, `browse` and `stat` print an unencrypted-transport warning to stderr and include warning code `unencrypted_transport` in the JSON `warnings` array.
 
 ### Transfers
 
@@ -72,7 +72,7 @@ thriftp transfer priority <transfer-id> <low|normal|high>
 thriftp transfer reorder <transfer-id>...
 ```
 
-**Rules**: `upload` and `download` remain active until a terminal state by default and report progress on stderr. `--no-wait` enqueues the work and returns a transfer ID immediately and requires an existing transfer host. The default conflict policy is `fail`; an existing destination without an explicit policy returns exit code 6 and is never overwritten silently. An explicit `--conflict` value applies to every conflict in the current invocation, which is the CLI equivalent of apply-to-all. `--recursive` preserves directory structure. Symbolic links are never followed; they are preserved when supported or skipped with a visible warning. `transfer cancel` requires `--yes`. `transfer wait` returns the terminal state or exit code 8 on host loss or interruption.
+**Rules**: `upload` and `download` remain active until a terminal state by default and report progress on stderr. When the selected profile uses plain FTP, upload, download, transfer status, wait, and list results print an unencrypted-transport warning to stderr and include warning code `unencrypted_transport` in the JSON `warnings` array. `--no-wait` enqueues the work and returns a transfer ID immediately and requires an existing transfer host. The default conflict policy is `fail`; an existing destination without an explicit policy returns exit code 6 and is never overwritten silently. An explicit `--conflict` value applies to every conflict in the current invocation, which is the CLI equivalent of apply-to-all. `--conflict overwrite` is the explicit confirmation for overwrite; `--yes` is required for delete and rename-overwrite. `--recursive` preserves directory structure. Symbolic links are never followed; they are preserved when supported or skipped with a visible warning. `transfer cancel` requires `--yes`. `transfer wait` returns the terminal state or exit code 8 on host loss or interruption.
 
 ### Local and Remote Directory Operations
 
@@ -110,6 +110,7 @@ thriftp mcp clients approve <request-id>
                           --dir <profile-id-or-name>:<path>...
                           [--local-dir <path>...]
                           --operations <operation>... [--expires <duration>]
+                          [--disconnect-policy <continue|cancel>]
                           [--pre-approve <operation>:<profile>:<path>] [--yes]
 thriftp mcp clients deny <request-id>
 thriftp mcp clients revoke <client-fingerprint> [--yes]
@@ -124,7 +125,7 @@ thriftp mcp audit retention <days>
 thriftp mcp audit limit <bytes|unlimited>
 ```
 
-**Rules**: `mcp enable` is an explicit user action; MCP remains disabled by default. `mcp status` reports the enabled state, mode, active session count, and supported protocol revisions. `clients list` shows every enrolled client, its grant, and its active sessions so a headless operator can see the full authorization state. `clients approve` requires at least one profile, one remote directory scope, one local directory scope when upload or download is granted, and one operation, and always shows the resulting scope before applying `--yes`. `clients revoke` terminates active sessions immediately and requires `--yes`. `mcp serve` starts the standalone stdio server for convenience; the canonical standalone binary is `thriftp-mcp`. `mcp audit` is read-only except for `retention` and `limit`, which change future retention and storage-limit policy and never delete immediately. `mcp audit verify` reports hash-chain integrity and never repairs a break.
+**Rules**: `mcp enable` is an explicit user action; MCP remains disabled by default. `mcp status` reports the enabled state, mode, active session count, and supported protocol revisions. `clients list` shows every enrolled client, its grant, and its active sessions so a headless operator can see the full authorization state. `clients approve` requires at least one profile, one remote directory scope, one local directory scope when upload or download is granted, and one operation, and always shows the resulting scope before applying `--yes`. It accepts `--disconnect-policy <continue|cancel>` to set what happens to an in-progress transfer when the client disconnects; the default is `continue`, and the choice is stored on the grant and audited. `clients revoke` terminates active sessions immediately and requires `--yes`. `mcp serve` starts the standalone stdio server for convenience; the canonical standalone binary is `thriftp-mcp`. `mcp audit` is read-only except for `retention` and `limit`, which change future retention and storage-limit policy and never delete immediately. `mcp audit verify` reports hash-chain integrity and never repairs a break.
 
 ## Secret Input
 
@@ -240,7 +241,8 @@ thriftp mcp enable --mode standalone
 thriftp mcp clients pending
 thriftp mcp clients approve <request-id> \
   --profile dev-server --dir dev-server:/srv/app --local-dir ./uploads \
-  --operations browse.list,transfers.upload,transfers.download,files.stat
+  --operations browse.list,transfers.upload,transfers.download,files.stat \
+  --disconnect-policy cancel
 
 # Inspect and verify the audit trail
 thriftp mcp audit list --since 2026-11-01T00:00:00Z --result denied
@@ -259,3 +261,4 @@ thriftp mcp audit verify
 8. Local deletion uses the OS trash when available; remote deletion warns that it is permanent.
 9. The CLI never reports an incomplete transfer as completed.
 10. The CLI never exposes favorites.
+11. Plain FTP sessions always emit an unencrypted-transport warning before and during use.

@@ -1,0 +1,19 @@
+[package]
+name = "thriftp-credentials-keyring"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+keyring.workspace = true
+thriftp-core = { path = "../thriftp-core" }
+zeroize.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+chrono.workspace = true
+uuid.workspace = true

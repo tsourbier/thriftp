@@ -1,0 +1,66 @@
+services:
+  ftp:
+    build: ../ftp
+    command: ["plain"]
+    environment:
+      PASV_ADDRESS: 127.0.0.1
+      PASV_MIN_PORT: 30000
+      PASV_MAX_PORT: 30009
+    ports:
+      - "2121:21"
+      - "30000-30009:30000-30009"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x vsftpd >/dev/null"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 2s
+
+  ftps-explicit:
+    build: ../ftp
+    command: ["explicit"]
+    environment:
+      PASV_ADDRESS: 127.0.0.1
+      PASV_MIN_PORT: 30100
+      PASV_MAX_PORT: 30109
+    ports:
+      - "2122:21"
+      - "30100-30109:30100-30109"
+    volumes:
+      - ./certs:/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x vsftpd >/dev/null"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 2s
+
+  ftps-implicit:
+    build: ../ftp
+    command: ["implicit"]
+    environment:
+      PASV_ADDRESS: 127.0.0.1
+      PASV_MIN_PORT: 30200
+      PASV_MAX_PORT: 30209
+    ports:
+      - "2990:990"
+      - "30200-30209:30200-30209"
+    volumes:
+      - ./certs:/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x vsftpd >/dev/null"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 2s
+
+  sftp:
+    build: ../sftp
+    ports:
+      - "2222:22"
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x sshd >/dev/null"]
+      interval: 5s
+      timeout: 2s
+      retries: 12
+      start_period: 2s

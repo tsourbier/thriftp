@@ -78,8 +78,10 @@ For an official release, generate the SBOM with the project's release tooling an
 1. Create an SFTP favorite using private-key authentication.
 2. Save the credential or passphrase as required.
 3. Inspect the favorites JSON document.
+4. Attempt a connection with an unknown or changed SSH host key, and attempt an FTPS connection with an invalid certificate.
+5. Move or delete the referenced private-key file, then reconnect.
 
-**Expected**: The document contains only the protected key reference and credential reference. It contains no private key material, passphrase, or password.
+**Expected**: The document contains only the protected key reference and credential reference. It contains no private key material, passphrase, or password. The host-key and certificate attempts fail without a silent bypass. The missing or moved key produces a clear error and requests a new key reference without reusing the old one.
 
 ### 4. Quick connect and last-used ordering
 

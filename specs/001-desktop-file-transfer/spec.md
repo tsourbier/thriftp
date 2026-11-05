@@ -27,6 +27,10 @@
 - Q: What happens to partially transferred files? → A: Local partial files are retained in an identifiable incomplete state for possible resume and can be discarded by the user; remote partial files are cleaned up when the protocol supports it, otherwise reported.
 - Q: Are the transfer queue and transfer history persisted? → A: Yes; both persist across restarts, and interrupted transfers are restored as interrupted.
 - Q: What does "organization details" on a connection profile mean? → A: An optional user-defined group label used to organize saved connections.
+- Q: Should accessibility and transfer-history retention remain open decisions? → A: Resolve them as WCAG 2.2 AA and 1,000 retained records with a user-clear action.
+- Q: Should FR-090 and FR-107 be made measurable? → A: Require action acknowledgement within 100 ms and no telemetry or user-data collection by default.
+- Q: Should duplicate large-directory requirements be consolidated? → A: Yes; keep one browsing block covering first entries, responsive interaction, loading indication, and separate local/remote metrics.
+- Q: Should open-source and validation gaps be task-covered? → A: Add tasks for MIT/contribution/security/license transparency, timing assertions, core-workflow validation, and contributor build validation.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -114,19 +118,19 @@ The user opens a transfer manager that lists pending, active, paused, completed,
 
 ---
 
-### User Story 5 - Organize work with tabs, favorites, and navigation history (Priority: P2)
+### User Story 5 - Organize work with tabs, directory favorites, and navigation history (Priority: P2)
 
-The user opens multiple remote locations in tabs, switches between connections while preserving each tab's navigation state, saves frequently used remote directories as favorites associated with a profile, and moves back and forward through visited locations.
+The user opens multiple remote locations in tabs, switches between connections while preserving each tab's navigation state, saves frequently used remote directories as directory favorites associated with a profile, and moves back and forward through visited locations.
 
 **Why this priority**: Repeated professional workflows depend on fast context switching and quick access to familiar locations.
 
-**Independent Test**: Open several tabs, navigate each to a different directory, save favorites, restart the application, and confirm tabs and favorites restore as expected.
+**Independent Test**: Open several tabs, navigate each to a different directory, save directory favorites, restart the application, and confirm tabs and directory favorites restore as expected.
 
 **Acceptance Scenarios**:
 
 1. **Given** a connected session, **when** the user opens a new tab, **then** the new tab has an independent navigation state.
 2. **Given** two tabs on different connections, **when** the user switches between them, **then** each retains its own path and view settings.
-3. **Given** a remote directory, **when** the user saves it as a favorite, **then** it appears under the associated connection profile and persists across restarts.
+3. **Given** a remote directory, **when** the user saves it as a directory favorite, **then** it appears under the associated connection profile and persists across restarts.
 4. **Given** a navigation history, **when** the user moves back and then forward, **then** the previously visited locations are restored in order.
 5. **Given** active transfers, **when** the user switches tabs or closes a browsing tab, **then** the transfers continue.
 6. **Given** one or more open tabs, **when** the application restarts, **then** the tabs and their locations are restored unless the user has chosen to start with a clean workspace.
@@ -225,8 +229,8 @@ The user restarts the application after an unexpected exit or a network interrup
 - **FR-020**: The application MUST provide an integrated local filesystem browser with directory navigation, metadata display, sorting, and filtering.
 - **FR-021**: Users MUST be able to create, rename, and delete local files and directories from within the application; deletes MUST require confirmation and MUST use the operating system trash when available.
 - **FR-022**: Local filesystem access MUST respect operating system permissions and security restrictions.
-- **FR-023**: Directory listings MUST display the first available entries before the complete listing finishes and MUST keep the interface responsive while enumeration continues.
-- **FR-024**: Local and remote directory performance MUST be specified and evaluated separately, accounting for server and network behavior on remote listings.
+- **FR-023**: Directory listings MUST display the first available entries before the complete listing finishes, MUST keep the interface responsive for scrolling, selection, and navigation while enumeration continues, and MUST indicate that more entries are still loading.
+- **FR-024**: Local and remote directory listings MUST be measured against separate performance targets that account for round-trip latency, server throughput, and network variability.
 
 **Dual-Pane Workspace**
 
@@ -305,11 +309,11 @@ The user restarts the application after an unexpected exit or a network interrup
 
 **Favorites, Tabs, and Navigation**
 
-- **FR-079**: Users MUST be able to save frequently accessed remote directories as favorites.
-- **FR-080**: Users MUST be able to organize favorite locations.
+- **FR-079**: Users MUST be able to save frequently accessed remote directories as directory favorites.
+- **FR-080**: Users MUST be able to organize directory favorite locations.
 - **FR-081**: Users MUST be able to quickly access saved connections.
 - **FR-082**: Users MUST be able to navigate backward and forward through previously visited locations.
-- **FR-083**: Favorites MUST persist across sessions and be associated with their relevant connection profiles.
+- **FR-083**: Directory favorites MUST persist across sessions and be associated with their relevant connection profiles.
 - **FR-084**: Users MUST be able to open multiple browsing tabs.
 - **FR-085**: Users MUST be able to maintain independent navigation state in each tab.
 - **FR-086**: Users MUST be able to close and reopen tabs.
@@ -319,7 +323,7 @@ The user restarts the application after an unexpected exit or a network interrup
 **User Experience**
 
 - **FR-089**: The application MUST follow each supported platform's interaction conventions for window controls, menus, keyboard shortcuts, file dialogs, and standard desktop gestures.
-- **FR-090**: The interface MUST use consistent terminology and layout across views and MUST provide immediate visible feedback for user actions.
+- **FR-090**: The interface MUST use consistent terminology and layout across views and MUST acknowledge user-initiated actions within 100 ms on a typical professional workstation.
 - **FR-091**: The application MUST make functionality discoverable and support efficient keyboard navigation.
 - **FR-092**: The interface MUST clearly distinguish local resources from remote resources.
 - **FR-093**: Transfer states MUST be represented consistently across browsing views, notifications, and the transfer manager.
@@ -339,7 +343,7 @@ The user restarts the application after an unexpected exit or a network interrup
 - **FR-104**: Certificate and host key verification MUST NOT be bypassed silently; any override MUST require explicit user action and remain visible for the session.
 - **FR-105**: The application MUST clearly indicate when an unencrypted FTP connection is in use, before and during the connection.
 - **FR-106**: The application MUST respect operating system filesystem permissions.
-- **FR-107**: The application MUST avoid unnecessary collection or transmission of user information.
+- **FR-107**: The application MUST NOT collect or transmit telemetry or personally identifiable user data by default; any optional diagnostics MUST be opt-in and documented.
 - **FR-108**: The application MUST NOT require an account, subscription, cloud service, or remote authentication service to function.
 - **FR-109**: Telemetry MUST NOT be mandatory.
 
@@ -353,27 +357,24 @@ The user restarts the application after an unexpected exit or a network interrup
 - **FR-115**: The application MUST remain responsive during intensive transfer operations.
 - **FR-116**: The application MUST account for differences in server capabilities and network behavior.
 - **FR-117**: When the user quits with pending, active, or paused transfers, the application MUST warn and require an explicit choice to wait for completion or cancel the transfers before quitting; it MUST NOT quit silently while transfers remain.
-- **FR-118**: Directory enumeration MUST NOT block user interaction; scrolling, selection, and navigation MUST remain available while a listing loads.
-- **FR-119**: Local and remote directory listings MUST be measured against separate performance targets that account for round-trip latency, server throughput, and network variability.
-- **FR-120**: While a directory listing is incomplete, the interface MUST indicate that more entries are still loading.
 
 **Open Source and Distribution**
 
-- **FR-121**: The project MUST be hosted in a public source repository.
-- **FR-122**: The project MUST use a permissive open-source license, initially MIT.
-- **FR-123**: The project MUST provide installation and build instructions.
-- **FR-124**: The project MUST provide contribution guidelines.
-- **FR-125**: The project MUST document architectural decisions.
-- **FR-126**: The project MUST include a security reporting policy.
-- **FR-127**: Third-party dependencies and their licenses MUST remain transparent.
-- **FR-128**: The project MUST support reproducible development and build workflows.
-- **FR-129**: The project MUST NOT depend on proprietary remote services for core functionality.
-- **FR-130**: The application MUST build and run on macOS, Linux, and Windows.
-- **FR-131**: The initial release MUST include automated tests, cross-platform build validation, and user documentation.
+- **FR-118**: The project MUST be hosted in a public source repository.
+- **FR-119**: The project MUST use a permissive open-source license, initially MIT.
+- **FR-120**: The project MUST provide installation and build instructions.
+- **FR-121**: The project MUST provide contribution guidelines.
+- **FR-122**: The project MUST document architectural decisions.
+- **FR-123**: The project MUST include a security reporting policy.
+- **FR-124**: Third-party dependencies and their licenses MUST remain transparent.
+- **FR-125**: The project MUST support reproducible development and build workflows.
+- **FR-126**: The project MUST NOT depend on proprietary remote services for core functionality.
+- **FR-127**: The application MUST build and run on macOS, Linux, and Windows.
+- **FR-128**: The initial release MUST include automated tests, cross-platform build validation, and user documentation.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Connection Profile**: A saved configuration for reaching a server. Holds a display name, optional group label, protocol, host, port, username, authentication method, timeout, and references to stored credentials. A profile can own favorites and be referenced by tabs.
+- **Connection Profile**: A saved configuration for reaching a server. Holds a display name, optional group label, protocol, host, port, username, authentication method, timeout, and references to stored credentials. A profile can own directory favorites and be referenced by tabs.
 - **Credential**: A secret used to authenticate. Referenced by a connection profile and held in the operating system credential store; never stored in plaintext with the profile.
 - **Browsing Session / Tab**: An active connection context with its own current location, navigation history, view settings, and selected items. Multiple sessions may exist simultaneously, including multiple sessions to the same server.
 - **File Entry**: A file or directory shown in a panel. Includes name, type, size, modification date, permissions, ownership where available, hidden status, path, and protocol-specific metadata.
@@ -381,7 +382,8 @@ The user restarts the application after an unexpected exit or a network interrup
 - **Transfer Queue**: The ordered collection of transfers, their priority levels, the configured concurrency limit, the global bandwidth limit, and aggregated progress. The queue persists across restarts.
 - **Transfer History**: The persisted record of completed, failed, cancelled, and interrupted transfers, including their final states and error details.
 - **Partial Transfer Data**: Local or remote data retained from an incomplete transfer, identified as incomplete and associated with the transfer needed to resume or discard it.
-- **Favorite**: A saved remote location associated with a connection profile, with a label and ordering used for quick access.
+- **Directory Favorite**: A saved remote location associated with a connection profile, with a label and ordering used for quick access.
+- **Server Favorite**: Defined by the Server Favorites feature (`003`). This feature supplies the shared connection-profile and credential interfaces it uses but does not redefine the server-favorite model.
 - **Preference**: A user setting such as theme, hidden-file visibility, default concurrency limit, bandwidth limit, preview behavior, connection timeout, and default local location.
 
 ### Out of Scope for the Initial Release
@@ -396,10 +398,10 @@ The user restarts the application after an unexpected exit or a network interrup
 - Mandatory cloud synchronization of connection profiles.
 - Built-in telemetry that users cannot disable.
 
-### Open Product Decisions
+### Resolved Product Decisions
 
-- **Accessibility conformance target**: The specification requires accessible typography, contrast, and interaction elements but does not adopt a formal accessibility standard or conformance level. A target must be chosen before release criteria are finalized.
-- **Transfer history retention**: Transfer history persists across restarts, but the retention period or size limit is not specified. A default must be chosen and documented.
+- **Accessibility conformance target**: WCAG 2.2 AA where applicable, supplemented by native platform accessibility APIs.
+- **Transfer history retention**: The 1,000 most recent transfer-history records are retained; users can clear history.
 
 ## Success Criteria *(mandatory)*
 
@@ -439,7 +441,8 @@ The user restarts the application after an unexpected exit or a network interrup
 - Resumability depends on protocol and server support; the application exposes it when available rather than promising it universally.
 - The transfer queue and transfer history are stored locally and persist across restarts.
 - Partial local files are retained for possible resume and can be discarded by the user; remote cleanup depends on protocol support.
-- Connection profiles, favorites, and preferences are stored locally for a single desktop user; no multi-user or shared-profile model is required.
+- Connection profiles, directory favorites, and preferences are stored locally for a single desktop user; no multi-user or shared-profile model is required.
+- Server favorites are specified by feature `003`; this feature does not duplicate or redefine their UX, data model, or management workflows.
 - The initial user interface is presented in English.
 - The initial release targets desktop use only; mobile and web clients are out of scope.
 - Native file preview integration is available on macOS; other platforms use the internal preview fallback when the native capability is absent.

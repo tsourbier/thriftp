@@ -1,0 +1,17 @@
+[package]
+name = "thriftp-integration-tests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dev-dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+tempfile.workspace = true
+thriftp-core = { path = "../../crates/thriftp-core" }
+thriftp-protocols = { path = "../../crates/thriftp-protocols" }
+tokio.workspace = true
+uuid.workspace = true

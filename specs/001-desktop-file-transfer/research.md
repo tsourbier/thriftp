@@ -6,14 +6,14 @@ All technical unknowns and the specification's open product decisions are resolv
 
 ## Decision 1: Protocol implementations
 
-**Decision**: Use `suppaftp` 12.x with its Tokio and rustls support for FTP and explicit/implicit FTPS, and `russh` + `russh-sftp` for SFTP. Use `rustls` with native root certificates for TLS. Enable `suppaftp`'s `tokio-rustls-ring` feature and the `deprecated` feature required for implicit FTPS, isolating implicit FTPS behind the adapter so it can be replaced if upstream removes it. This requires Rust edition 2024 and the MSRV required by the pinned dependency set (at least Rust 1.85.1).
+**Decision**: Use `suppaftp` 12.x with its Tokio and `native-tls` support for FTP and explicit/implicit FTPS, and `russh` + `russh-sftp` for SFTP. TLS uses the operating-system trust store through `native-tls`; the accepted deviation from the earlier `rustls` choice is recorded in `docs/adr/0001-ftp-tls-stack.md`. Enable the `deprecated` feature required for implicit FTPS, isolating implicit FTPS behind the adapter so it can be replaced if upstream removes it. This requires Rust edition 2024 and the MSRV required by the pinned dependency set (at least Rust 1.85.1).
 
 **Rationale**: The chosen libraries are Rust-native, actively maintained, and fit the async core. `suppaftp` covers FTP and FTPS with a TLS connector; `russh`/`russh-sftp` provides async SFTP, key authentication, and known-host verification without linking a C library. Pinning the implicit-FTPS dependency to the adapter limits the impact of its documented deprecation.
 
 **Alternatives considered**:
 - `ssh2`/libssh2: mature, but a C dependency with blocking APIs and more platform packaging risk.
 - `async-ftp`: less feature-complete for FTPS modes.
-- `native-tls`: platform-variable behavior and certificate-store differences; rustls gives consistent validation.
+- `native-tls`: selected for the delivered adapter because it integrates cleanly with `suppaftp`'s data-connection API and the operating-system trust store; the platform-variable behavior is documented in ADR 0001.
 - Dropping implicit FTPS: rejected because the initial release explicitly supports it; the deprecated upstream path is isolated and monitored.
 
 ## Decision 2: Async transfer engine
@@ -130,7 +130,7 @@ All technical unknowns and the specification's open product decisions are resolv
 
 ## Decision 12: TLS and SSH host-key verification
 
-**Decision**: Use `rustls` with native root certificates for FTPS; verify SFTP host keys against known-hosts data. Verification is on by default. An override requires explicit user action, is visible for the session, and is recorded. Plain FTP is clearly marked as unencrypted.
+**Decision**: Use `native-tls` with the operating-system trust store for FTPS; verify SFTP host keys against known-hosts data. Verification is on by default. An override requires explicit user action, is visible for the session, and is recorded. Plain FTP is clearly marked as unencrypted.
 
 **Rationale**: Required by the constitution and specification. No silent bypass is permitted.
 
@@ -177,7 +177,7 @@ All technical unknowns and the specification's open product decisions are resolv
 
 **Decision**: Target WCAG 2.2 AA where applicable to the desktop UI, supplemented by native platform accessibility APIs. Provide keyboard navigation, visible focus, screen-reader labels, accessible names for protocol and transfer states, and reduced-motion support.
 
-**Rationale**: The specification leaves the formal target open; WCAG 2.2 AA is a widely recognized baseline and is testable. Native APIs cover desktop-specific controls.
+**Rationale**: The specification records WCAG 2.2 AA as the formal target; it is a widely recognized baseline and is testable. Native APIs cover desktop-specific controls.
 
 **Alternatives considered**:
 - No formal target: leaves acceptance criteria ambiguous.
@@ -188,7 +188,7 @@ All technical unknowns and the specification's open product decisions are resolv
 
 **Decision**: Retain the 1,000 most recent transfer-history records. Provide a user action to clear history. Keep the active queue separate and fully persisted.
 
-**Rationale**: Resolves the specification's open retention decision with a bounded, predictable default that supports troubleshooting without unbounded growth.
+**Rationale**: This records the specification's resolved retention decision with a bounded, predictable default that supports troubleshooting without unbounded growth.
 
 **Alternatives considered**:
 - Unlimited retention: unbounded file growth.
@@ -262,7 +262,7 @@ All technical unknowns and the specification's open product decisions are resolv
 | Conflict and symlink policy | Prompt with apply-to-all; never follow links |
 | Previews | Native OS preview plus bounded internal fallback |
 | Local delete | OS trash through `trash`; remote deletion permanent with warning |
-| TLS and host keys | `rustls` native roots and known-hosts; explicit override only |
+| TLS and host keys | `native-tls` OS trust store and known-hosts; explicit override only |
 | Testing | Shared Docker Compose harness on macOS Docker Desktop and Linux CI; Docker-free unit and platform tests; separate CI stages |
 | Observability | `tracing` with contextual fields and redaction |
 | Accessibility | WCAG 2.2 AA where applicable plus native platform APIs |

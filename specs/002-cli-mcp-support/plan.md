@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add two first-class, headless automation surfaces to Thriftp: a scriptable `thriftp` CLI and a local-only Model Context Protocol (MCP) server, both thin adapters over the existing `thriftp-core` connection, browsing, transfer, queue, and credential services. The CLI provides deterministic JSON output, stable exit codes, secure stdin-only secret input, directory operations, transfer lifecycle control, and MCP administration. The MCP server is disabled by default, requires explicit per-client enrollment and scoped grants, enforces canonical path scopes for local and remote operations, requires confirmation or a scoped pre-approval policy for destructive actions, and writes a durable audit record for every operation, failing closed when the audit record cannot be written. A single-owner **transfer host** coordinates the desktop application, CLI, and MCP server through the shared persisted queue and a local-only control channel, so all surfaces observe and control the same transfers without an always-running daemon. Protocol integration tests reuse the shared `001` Docker Compose harness on macOS Docker Desktop and Linux CI; Docker is a development/CI tool only and never a runtime dependency of the CLI or MCP server. Planning resolves the specification's deferred decisions: local IPC for process coordination, Ed25519-based client identity with explicit enrollment, and dual-era MCP support for `2026-07-28` (primary) and `2025-11-25` (legacy). The plan assumes the `thriftp-core`, `thriftp-storage-json`, and native credential adapter described by `001` and `003` are implemented first; it extends them without duplicating protocol or credential logic.
+Add two first-class, headless automation surfaces to Thriftp: a scriptable `thriftp` CLI and a local-only Model Context Protocol (MCP) server, both thin adapters over the existing `thriftp-core` connection, browsing, transfer, queue, and credential services. The CLI provides deterministic JSON output, stable exit codes, secure stdin-only secret input, directory operations, transfer lifecycle control, and MCP administration. The MCP server is disabled by default, requires explicit per-client enrollment and scoped grants, enforces canonical path scopes for local and remote operations (remote scopes are profile-bound; local scopes are profile-independent upload/download endpoints), requires confirmation or a scoped pre-approval policy for destructive actions, and writes a durable audit record for every operation, failing closed when the audit record cannot be written. A single-owner **transfer host** coordinates the desktop application, CLI, and MCP server through the shared persisted queue and a local-only control channel, so all surfaces observe and control the same transfers without an always-running daemon. Protocol integration tests reuse the shared `001` Docker Compose harness on macOS Docker Desktop and Linux CI; Docker is a development/CI tool only and never a runtime dependency of the CLI or MCP server. Planning resolves the specification's deferred decisions: local IPC for process coordination, Ed25519-based client identity with explicit enrollment, and dual-era MCP support for `2026-07-28` (primary) and `2025-11-25` (legacy). The plan assumes the `thriftp-core`, `thriftp-storage-json`, and native credential adapter described by `001` and `003` are implemented first; it extends them without duplicating protocol or credential logic.
 
 ## Technical Context
 
@@ -16,7 +16,7 @@ Add two first-class, headless automation surfaces to Thriftp: a scriptable `thri
 
 **Storage**: Existing shared `favorites.json` (connection profiles and credential references) and `transfers.json` (queue, active transfers, partial data, history) from `001`/`003`; new versioned `automation.json` for MCP settings, enrolled clients, enrollment requests, grants, directory scopes, and approval policies; append-only `audit/YYYY-MM-DD.jsonl` segments with hash chaining; ephemeral `run/host.lock`, `run/host.json`, `run/host.token`, and the control endpoint under the OS application-data directory. No secrets are persisted outside the native OS credential store.
 
-**Testing**: `cargo test` Docker-free unit, contract, multi-process, and platform tests; `assert_cmd`/`predicates`/`insta` CLI contract and snapshot tests with stdout/stderr separation assertions; `jsonschema` validation of CLI JSON and MCP tool schemas; an in-process `rmcp` client harness for tool, authorization, version-negotiation, and audit-failure tests; multi-process tests that spawn real CLI/MCP binaries to exercise host ownership, delegation, host loss, and stale-lock recovery; protocol integration tests through the shared `001` Docker Compose harness on macOS Docker Desktop and Linux CI, with Windows Docker Desktop optional; separate CI stages for unit/contract, protocol integration, multi-process, platform, and build
+**Testing**: `cargo test` Docker-free unit, contract, multi-process, and platform tests; `assert_cmd`/`predicates`/`insta` CLI contract and snapshot tests with stdout/stderr separation assertions; `jsonschema` validation of CLI JSON and MCP tool schemas; an in-process `rmcp` client harness for tool, authorization, version-negotiation, destructive-confirmation, disabled-by-default, remote-client-rejection, client-disconnect-policy, audit-failure, and audit-tamper tests; parity tests that run identical authorization, audit, denial, and transfer scenarios across standalone MCP, embedded MCP, CLI, and desktop; security-parity tests for the native credential store, certificate validation, host-key rejection, plain-FTP warning, and OS permissions; multi-process tests that spawn real CLI/MCP binaries to exercise host ownership, delegation, host loss, and stale-lock recovery; protocol integration tests through the shared `001` Docker Compose harness on macOS Docker Desktop and Linux CI, with Windows Docker Desktop optional; separate CI stages for unit/contract, protocol integration, multi-process, platform, and build
 
 **Target Platform**: macOS, Linux, and Windows desktop and headless hosts
 
@@ -60,7 +60,9 @@ specs/002-cli-mcp-support/
 │   ├── mcp-tools.md
 │   ├── automation-authorization.md
 │   └── transfer-host.md
-└── tasks.md             # Phase 2 output (/speckit.tasks, not created here)
+├── security-review.md   # Required security review record
+├── validation.md        # Quickstart validation record with timing evidence
+└── tasks.md             # Phase 2 output (/speckit.tasks)
 ```
 
 ### Source Code (repository root)
@@ -87,6 +89,7 @@ crates/
 │   │   │   ├── scope.rs
 │   │   │   ├── approval.rs
 │   │   │   ├── audit.rs
+│   │   │   ├── retention.rs
 │   │   │   └── service.rs
 │   │   └── host/                # New: single-owner transfer host and control protocol
 │   │       ├── mod.rs
@@ -120,20 +123,22 @@ crates/
 │   │   ├── exit.rs
 │   │   └── secret_input.rs
 │   └── tests/
-└── thriftp-mcp/                 # New: `thriftp-mcp` binary + embedded server library
-    ├── src/
-    │   ├── lib.rs
-    │   ├── server.rs
-    │   ├── auth.rs
-    │   ├── transport.rs
-    │   ├── errors.rs
-    │   └── tools/
-    │       ├── connections.rs
-    │       ├── browse.rs
-    │       ├── files.rs
-    │       ├── transfers.rs
-    │       ├── queue.rs
-    │       └── automation.rs
+├── thriftp-mcp/                 # New: `thriftp-mcp` binary + embedded server library
+│   ├── src/
+│   │   ├── lib.rs
+│   │   ├── server.rs
+│   │   ├── auth.rs
+│   │   ├── transport.rs
+│   │   ├── errors.rs
+│   │   └── tools/
+│   │       ├── connections.rs
+│   │       ├── browse.rs
+│   │       ├── files.rs
+│   │       ├── transfers.rs
+│   │       ├── queue.rs
+│   │       └── automation.rs
+│   └── tests/
+└── thriftp-tests/               # New: shared end-to-end CLI, MCP, host, security tests
     └── tests/
 
 apps/
@@ -158,14 +163,20 @@ docs/
 ├── transfer-host.md             # Process ownership and shared-state model
 └── compatibility.md             # CLI/MCP versions and deprecation policy
 
-tests/
+```
+
+Shared end-to-end scenarios live in `crates/thriftp-tests/tests/`:
+
+```text
+crates/thriftp-tests/tests/
 ├── cli/                         # End-to-end CLI contract scenarios
 ├── mcp/                         # MCP client contract scenarios
 ├── host/                        # Multi-process ownership and handoff scenarios
-└── integration/                 # Shared 001 Docker Compose protocol scenarios via scripts/test-integration.sh
+├── integration/                 # Shared 001 Docker Compose protocol scenarios via scripts/test-integration.sh
+└── security/                    # Secret redaction, security parity, and panic-safety scenarios
 ```
 
-**Structure Decision**: The workspace keeps `thriftp-core` independent of Tauri and of any specific surface. New `automation` and `host` modules own MCP identity, authorization, scopes, approvals, audit orchestration, transfer-host ownership, and the local control protocol. `thriftp-cli` and `thriftp-mcp` are thin adapters that translate their protocols into core service calls; neither contains protocol or business logic. `thriftp-storage-json` gains automation and audit adapters behind core traits. The desktop application only adds a control surface and the embedded MCP lifecycle; it does not own automation rules. This satisfies the constitution's shared-core, security-parity, and thin-adapter requirements and avoids a second implementation of file transfer behavior.
+**Structure Decision**: The workspace keeps `thriftp-core` independent of Tauri and of any specific surface. New `automation` and `host` modules own MCP identity, authorization, scopes, approvals, audit orchestration, transfer-host ownership, and the local control protocol. `thriftp-cli` and `thriftp-mcp` are thin adapters that translate their protocols into core service calls; neither contains protocol or business logic. `thriftp-storage-json` gains automation and audit adapters behind core traits. The `thriftp-tests` crate hosts shared multi-process, parity, security, and end-to-end scenarios. The desktop application only adds a control surface and the embedded MCP lifecycle; it does not own automation rules. This satisfies the constitution's shared-core, security-parity, and thin-adapter requirements and avoids a second implementation of file transfer behavior.
 
 ## Phase 0: Research
 
@@ -187,11 +198,12 @@ Re-evaluated after Phase 1 design:
 - **Core independence**: All connection, browsing, transfer, queue, credential, automation, and host logic lives in `thriftp-core`; the CLI, MCP server, and Tauri commands are adapters.
 - **No parallel protocol logic**: FTP/FTPS/SFTP continue to implement `RemoteFs`; the new surfaces call the existing transfer engine and protocol adapters.
 - **Streaming and memory**: CLI and MCP transfers use the same chunked engine; MCP returns transfer IDs for long operations and never buffers file data; directory listings stream and paginate.
-- **Security parity**: Both surfaces use `CredentialStore`, certificate and host-key verification, and least privilege. Secrets are stdin-only, zeroized, and never serialized. MCP is local-only, disabled by default, explicitly enrolled, scoped, and audited.
+- **Security parity**: Both surfaces use `CredentialStore`, certificate and host-key verification, plain-FTP unencrypted-transport warnings, and least privilege. Secrets are stdin-only, zeroized, and never serialized. MCP is local-only, disabled by default, explicitly enrolled, scoped, and audited.
+- **Security review and documentation gates**: An explicit security review covers MCP identity, scopes, approvals, audit, tokens, and secret handling. Public core, CLI, and MCP APIs are documented with rustdoc and a `missing_docs` or `cargo doc` gate. Recoverable-error paths are audited for panics and `unwrap`/`expect` use.
 - **Auditability**: Every MCP operation, including denials, produces a hash-chained, fsynced audit record before a result is returned; destructive operations never proceed without durable audit.
 - **Process model**: A single transfer host owns execution; desktop, CLI, and MCP share state through a local authenticated control channel; no always-running daemon and no silent completion after process exit.
 - **Compatibility**: CLI and MCP contracts are versioned; MCP supports `2026-07-28` and `2025-11-25`; unsupported versions receive a clear compatibility error.
-- **Quality**: Contract tests, schema validation, multi-process tests, fault injection, Docker-free unit/contract tests, shared containerized protocol integration tests on macOS Docker Desktop and Linux CI, separate CI stages, cross-platform CI, and benchmarks are defined.
+- **Quality**: Contract tests, schema validation, destructive-confirmation tests, disabled-by-default and remote-client tests, standalone/embedded and desktop/CLI/MCP parity tests, security-parity tests, audit-tamper tests, multi-process tests, fault injection, panic/unwrap audits, Docker-free unit/contract tests, shared containerized protocol integration tests on macOS Docker Desktop and Linux CI, separate CI stages, cross-platform CI, and benchmarks are defined.
 - **Containerized integration testing**: Docker is used only for shared protocol tests; it is never a CLI/MCP runtime dependency, and a missing runtime skips only the protocol-integration stage without masking unit, contract, multi-process, or platform results.
 - **Supply chain**: Dependencies are pinned; the MSRV moves to 1.88 for `rmcp` 3.8; SBOM, audits, and lockfile enforcement remain required.
 - **Scope discipline**: Favorites, remote MCP, shell tools, and an always-running daemon remain out of scope.

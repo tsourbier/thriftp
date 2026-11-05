@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/thriftp-core",
+    "crates/thriftp-protocols",
+    "crates/thriftp-credentials-keyring",
+    "crates/thriftp-storage-json",
+    "crates/thriftp-cli",
+    "crates/thriftp-mcp",
+    "crates/thriftp-tests",
+    "tests/integration",
+]
+exclude = ["apps/desktop/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88.0"
+license = "MIT"
+repository = "https://github.com/tsourbier/thriftp"
+
+[workspace.dependencies]
+async-trait = "0.1"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.5", features = ["derive"] }
+criterion = "0.5"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand_core = { version = "0.6", features = ["getrandom"] }
+sha2 = "0.10"
+keyring = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+suppaftp = { version = "12", features = ["native-tls", "deprecated"] }
+russh = "0.54"
+russh-sftp = "3"
+anyhow = "1"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt", "signal", "sync", "time"] }
+trash = "5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["serde", "v4", "v5"] }
+zeroize = { version = "1", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
