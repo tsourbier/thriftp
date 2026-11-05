@@ -52,10 +52,16 @@
 
 html,
 body {
+  height: 100%;
   margin: 0;
+  overflow: hidden;
   background: var(--surface);
   color: var(--text);
   font-family: var(--font-ui);
+}
+
+#app {
+  height: 100%;
 }
 
 button,

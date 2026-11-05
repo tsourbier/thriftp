@@ -809,6 +809,7 @@
   }
   .dual-pane {
     display: grid;
+    grid-template-rows: minmax(0, 1fr);
     gap: 0;
     flex: 1;
     background: var(--border);
@@ -830,6 +831,7 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
   }
   .pane.active {
     box-shadow: inset 0 0 0 2px Highlight;
@@ -855,6 +857,9 @@
   .list {
     flex: 1;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
   .pane-error {
     color: var(--danger-text);

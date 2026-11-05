@@ -29,6 +29,23 @@
   const visibleCount = $derived(Math.ceil(viewportHeight / rowHeight) + 8);
   const visibleEntries = $derived(entries.slice(startIndex, startIndex + visibleCount));
 
+  function measureViewport(node: HTMLElement) {
+    const update = () => {
+      viewportHeight = node.clientHeight;
+    };
+    update();
+    const observer =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(node);
+    window.addEventListener("resize", update);
+    return {
+      destroy() {
+        observer?.disconnect();
+        window.removeEventListener("resize", update);
+      }
+    };
+  }
+
   function onscroll(event: Event) {
     const element = event.currentTarget as HTMLElement;
     scrollTop = element.scrollTop;
@@ -80,7 +97,14 @@
   {:else if entries.length === 0 && listingState === "complete"}
     <p class="status" role="status">This directory is empty.</p>
   {:else}
-    <div class="viewport" role="listbox" {onscroll} tabindex="0" aria-label="Files">
+    <div
+      class="viewport"
+      role="listbox"
+      use:measureViewport
+      {onscroll}
+      tabindex="0"
+      aria-label="Files"
+    >
       <div style="height: {entries.length * rowHeight}px; position: relative;">
         {#each visibleEntries as entry, index (entry.path)}
           {@const top = (startIndex + index) * rowHeight}
@@ -124,6 +148,7 @@
 <style>
   .directory {
     display: flex;
+    flex: 1;
     flex-direction: column;
     min-height: 0;
   }
@@ -143,9 +168,9 @@
     padding-bottom: 0.25rem;
   }
   .viewport {
+    flex: 1;
+    min-height: 0;
     overflow: auto;
-    max-height: 100%;
-    min-height: 12rem;
   }
   .row {
     position: absolute;

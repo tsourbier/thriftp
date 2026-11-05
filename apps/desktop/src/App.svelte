@@ -1852,7 +1852,9 @@
   .shell {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
     font-family: system-ui, sans-serif;
   }
   .titlebar {
@@ -1908,6 +1910,7 @@
     display: flex;
     flex: 1;
     min-height: 0;
+    overflow: hidden;
     position: relative;
   }
   .server-favorites-panel {
@@ -1941,12 +1944,14 @@
     flex: 1;
     min-width: 0;
     min-height: 0;
+    overflow: hidden;
   }
   .browser-body {
     display: flex;
     flex: 1;
     min-height: 0;
     min-width: 0;
+    overflow: hidden;
   }
   .connection-picker {
     display: flex;
