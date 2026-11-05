@@ -46,7 +46,10 @@ impl DesktopError {
             CoreError::CredentialStoreUnavailable(_) => {
                 "The operating-system credential store is unavailable.".to_owned()
             }
-            CoreError::AuthFailed(_) => "Authentication failed.".to_owned(),
+            CoreError::AuthFailed(_) => {
+                "Authentication failed. Check the credential and that the server accepts this key."
+                    .to_owned()
+            }
             CoreError::CertificateInvalid(_) => {
                 "The server certificate could not be verified.".to_owned()
             }

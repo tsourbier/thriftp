@@ -35,6 +35,7 @@
     ondismiss: (transfer: TransferView) => void;
   } = $props();
 
+  let collapsed = $state(false);
   let concurrency = $state(untrack(() => queue?.concurrencyLimit ?? 4));
   let bandwidthKb = $state(
     untrack(() =>
@@ -73,7 +74,9 @@
 
   let dismissed = $state<Set<string>>(new Set());
   const visibleTransfers = $derived(
-    transfers.filter((transfer) => !dismissed.has(transfer.id))
+    transfers.filter(
+      (transfer) => transfer.state !== "completed" && !dismissed.has(transfer.id)
+    )
   );
   const activeCount = $derived(
     visibleTransfers.filter((transfer) => transfer.state === "active").length
@@ -101,85 +104,100 @@
   }
 </script>
 
-<section class="queue" aria-label="Transfer queue">
+<section class="queue" class:collapsed aria-label="Transfer queue">
   <header class="heading">
-    <h2>Queue</h2>
-    <span class="summary">
-      {activeCount} active · {visibleTransfers.length} total
-      {#if aggregatePercent !== null}
-        · {aggregatePercent}% aggregate
-      {/if}
-    </span>
+    <div class="heading-text">
+      <h2>Queue</h2>
+      <span class="summary">
+        {activeCount} active · {visibleTransfers.length} total
+        {#if aggregatePercent !== null}
+          · {aggregatePercent}% aggregate
+        {/if}
+      </span>
+    </div>
+    <button
+      type="button"
+      class="toggle"
+      aria-expanded={!collapsed}
+      aria-controls="queue-body"
+      onclick={() => (collapsed = !collapsed)}
+    >
+      {collapsed ? "Expand" : "Collapse"}
+    </button>
   </header>
 
-  <div class="controls">
-    <button type="button" onclick={queue?.paused ? onresumequeue : onpausequeue}>
-      {queue?.paused ? "Resume queue" : "Pause queue"}
-    </button>
-    <label class="inline">
-      Concurrent
-      <input
-        type="number"
-        min="1"
-        max="16"
-        bind:value={concurrency}
-        onchange={() => onsetconcurrency(concurrency)}
-        aria-label="Concurrent transfers"
-      />
-    </label>
-    <label class="inline">
-      Limit KB/s
-      <input
-        type="number"
-        min="0"
-        bind:value={bandwidthKb}
-        onchange={() => onsetbandwidth(bandwidthKb > 0 ? bandwidthKb * 1024 : null)}
-        aria-label="Bandwidth limit in kilobytes per second"
-      />
-    </label>
-    <button type="button" class="danger" onclick={oncancelall}>Cancel all</button>
-    <button type="button" onclick={onclearhistory}>Clear history</button>
-  </div>
+  {#if !collapsed}
+    <div class="body" id="queue-body">
+      <div class="controls">
+        <button type="button" onclick={queue?.paused ? onresumequeue : onpausequeue}>
+          {queue?.paused ? "Resume queue" : "Pause queue"}
+        </button>
+        <label class="inline">
+          Concurrent
+          <input
+            type="number"
+            min="1"
+            max="16"
+            bind:value={concurrency}
+            onchange={() => onsetconcurrency(concurrency)}
+            aria-label="Concurrent transfers"
+          />
+        </label>
+        <label class="inline">
+          Limit KB/s
+          <input
+            type="number"
+            min="0"
+            bind:value={bandwidthKb}
+            onchange={() => onsetbandwidth(bandwidthKb > 0 ? bandwidthKb * 1024 : null)}
+            aria-label="Bandwidth limit in kilobytes per second"
+          />
+        </label>
+        <button type="button" class="danger" onclick={oncancelall}>Cancel all</button>
+        <button type="button" onclick={onclearhistory}>Clear history</button>
+      </div>
 
-  <TransferList
-    transfers={visibleTransfers}
-    onpause={onpausetransfer}
-    onresume={onresumetransfer}
-    oncancel={oncanceltransfer}
-    ondismiss={dismiss}
-  />
+      <TransferList
+        transfers={visibleTransfers}
+        onpause={onpausetransfer}
+        onresume={onresumetransfer}
+        oncancel={oncanceltransfer}
+        ondismiss={dismiss}
+      />
 
-  <ul class="ordering" aria-label="Queue order">
-    {#each orderedIds() as id (id)}
-      {@const transfer = visibleTransfers.find((candidate) => candidate.id === id)}
-      {#if transfer}
-        <li>
-          <span class="name" title={transfer.destinationPath}>
-            {transfer.destinationPath.split(/[\\/]/).pop()}
-          </span>
-          <select
-            aria-label="Priority"
-            value={transfer.priority}
-            onchange={(event) =>
-              onsetpriority(
-                id,
-                (event.currentTarget as HTMLSelectElement).value as Priority
-              )}
-          >
-            <option value="high">High</option>
-            <option value="normal">Normal</option>
-            <option value="low">Low</option>
-          </select>
-          <button type="button" onclick={() => move(id, -1)} aria-label="Move up"
-            >↑</button
-          >
-          <button type="button" onclick={() => move(id, 1)} aria-label="Move down"
-            >↓</button
-          >
-        </li>
-      {/if}
-    {/each}
-  </ul>
+      <ul class="ordering" aria-label="Queue order">
+        {#each orderedIds() as id (id)}
+          {@const transfer = visibleTransfers.find((candidate) => candidate.id === id)}
+          {#if transfer}
+            <li>
+              <span class="name" title={transfer.destinationPath}>
+                {transfer.destinationPath.split(/[\\/]/).pop()}
+              </span>
+              <select
+                aria-label="Priority"
+                value={transfer.priority}
+                onchange={(event) =>
+                  onsetpriority(
+                    id,
+                    (event.currentTarget as HTMLSelectElement).value as Priority
+                  )}
+              >
+                <option value="high">High</option>
+                <option value="normal">Normal</option>
+                <option value="low">Low</option>
+              </select>
+              <button type="button" onclick={() => move(id, -1)} aria-label="Move up"
+                >↑</button
+              >
+              <button type="button" onclick={() => move(id, 1)} aria-label="Move down"
+                >↓</button
+              >
+            </li>
+          {/if}
+        {/each}
+      </ul>
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -187,16 +205,37 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    flex: 0 0 auto;
     min-height: 0;
-    padding: 0.75rem;
-    border-left: 1px solid #d0d0d0;
-    width: 22rem;
-    overflow: auto;
+    max-height: 40vh;
+    padding: 0.6rem 0.75rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .queue.collapsed {
+    max-height: none;
   }
   .heading {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .heading-text {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .toggle {
+    flex: 0 0 auto;
+  }
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0;
+    overflow: auto;
   }
   h2 {
     font-size: 0.9rem;

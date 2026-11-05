@@ -294,7 +294,7 @@
   {/if}
   {#if policy === "save" && !credentialRefId}
     <label>
-      Password
+      {usesPrivateKey ? "SSH key passphrase" : "Password"}
       <input
         type="password"
         bind:value={secret}
@@ -304,7 +304,7 @@
   {/if}
   {#if ontest}
     <label>
-      Test credential
+      {usesPrivateKey ? "Test passphrase" : "Test credential"}
       <input
         type="password"
         bind:value={testSecret}

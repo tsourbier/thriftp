@@ -16,7 +16,8 @@ Node.js 26.13.0 LTS.
 - Streaming uploads/downloads with progress, speed, ETA, pause, resume, cancel,
   conflict handling, recursive directories, and symlink policy.
 - Persistent queue with concurrency, bandwidth limit, priority, reorder, and
-  cancel-all.
+  cancel-all. Completed transfers leave the queue automatically; failed,
+  cancelled, and interrupted transfers remain until dismissed.
 - Tabs and directory favorites, restored on launch.
 - File inspector with permissions, ownership, and supported `chmod`.
 - Internal text/image preview with size limits; native open for other files.

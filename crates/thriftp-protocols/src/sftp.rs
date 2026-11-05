@@ -291,19 +291,24 @@ impl RemoteFs for SftpAdapter {
                 let key_path = profile.ssh_key_ref.as_deref().ok_or_else(|| {
                     CoreError::validation("sshKeyRef is required for private-key authentication")
                 })?;
+                let key_path = thriftp_core::ssh_keys::resolve_key_path(key_path);
                 let passphrase = credential
                     .as_ref()
                     .map(|secret| String::from_utf8_lossy(secret.expose()).into_owned());
-                let key = russh::keys::load_secret_key(key_path, passphrase.as_deref()).map_err(
-                    |error| CoreError::AuthFailed(format!("could not load SSH key: {error}")),
-                )?;
-                let key = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key), None);
+                let key = load_private_key(&key_path, passphrase.as_deref())?;
+                let hash_alg = key
+                    .algorithm()
+                    .is_rsa()
+                    .then_some(russh::keys::HashAlg::Sha256);
+                let key = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key), hash_alg);
                 let result = session
                     .authenticate_publickey(&profile.username, key)
                     .await
                     .map_err(map_ssh_error)?;
                 if !result.success() {
-                    return Err(CoreError::CredentialRejected);
+                    return Err(CoreError::AuthFailed(
+                        "the server rejected the SSH private key".to_owned(),
+                    ));
                 }
             }
         }
@@ -604,6 +609,20 @@ fn file_type_from_mode(permissions: Option<u32>) -> FileType {
     }
 }
 
+fn load_private_key(path: &Path, passphrase: Option<&str>) -> CoreResult<russh::keys::PrivateKey> {
+    match russh::keys::load_secret_key(path, passphrase) {
+        Ok(key) => Ok(key),
+        Err(russh::keys::Error::KeyIsEncrypted) => Err(CoreError::CredentialMissing),
+        Err(russh::keys::Error::IO(error)) => Err(CoreError::AuthFailed(format!(
+            "could not load SSH key: {error}"
+        ))),
+        Err(_error) if passphrase.is_some() => Err(CoreError::CredentialRejected),
+        Err(error) => Err(CoreError::AuthFailed(format!(
+            "could not load SSH key: {error}"
+        ))),
+    }
+}
+
 fn map_io_error(error: std::io::Error) -> CoreError {
     if error.kind() == std::io::ErrorKind::TimedOut {
         CoreError::Timeout(error.to_string())
@@ -716,6 +735,21 @@ mod tests {
             Some("abc+/")
         );
         assert!(trusted_fingerprint(&path, "example.com", 2222).is_none());
+    }
+
+    #[test]
+    fn distinguishes_missing_and_wrong_key_passphrases() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docker/sftp/keys/client_ed25519");
+        assert!(matches!(
+            load_private_key(&path, None),
+            Err(CoreError::CredentialMissing)
+        ));
+        assert!(matches!(
+            load_private_key(&path, Some("wrong")),
+            Err(CoreError::CredentialRejected)
+        ));
+        assert!(load_private_key(&path, Some("testpass")).is_ok());
     }
 
     #[test]

@@ -64,13 +64,38 @@ impl SshKeyValidation {
     }
 }
 
+/// Resolve the platform home directory.
+fn home_directory() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
 /// Resolve the platform SSH directory.
 #[must_use]
 pub fn platform_ssh_directory() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")
-        .or_else(|| std::env::var_os("USERPROFILE"))
-        .map(PathBuf::from)?;
-    Some(home.join(".ssh"))
+    Some(home_directory()?.join(".ssh"))
+}
+
+/// Expand a leading `~` in a private-key path.
+///
+/// Other paths, including relative ones, are returned unchanged for the
+/// connection attempt to validate. The expansion only uses `HOME` or
+/// `USERPROFILE`; no shell evaluation is performed.
+#[must_use]
+pub fn resolve_key_path(path: &str) -> PathBuf {
+    let trimmed = path.trim();
+    if trimmed == "~" {
+        return home_directory().unwrap_or_else(|| PathBuf::from(trimmed));
+    }
+    if let Some(rest) = trimmed
+        .strip_prefix("~/")
+        .or_else(|| trimmed.strip_prefix("~\\"))
+        && let Some(home) = home_directory()
+    {
+        return home.join(rest);
+    }
+    PathBuf::from(trimmed)
 }
 
 /// Scan the default platform SSH directory.
@@ -138,7 +163,7 @@ pub fn validate_key_path(path: &str) -> CoreResult<SshKeyValidation> {
     if path.contains('\0') {
         return Err(CoreError::validation("path contains an invalid character"));
     }
-    let candidate = Path::new(path);
+    let candidate = resolve_key_path(path);
     if !candidate.exists() {
         return Ok(SshKeyValidation::invalid(
             "missing",
@@ -195,6 +220,20 @@ mod tests {
         assert!(!listing.exists);
         assert!(!listing.readable);
         assert!(listing.candidates.is_empty());
+    }
+
+    #[test]
+    fn expands_tilde_key_paths() {
+        if let Some(directory) = super::platform_ssh_directory() {
+            assert_eq!(
+                super::resolve_key_path("~/.ssh/id_ed25519"),
+                directory.join("id_ed25519")
+            );
+        }
+        assert_eq!(
+            super::resolve_key_path("/tmp/custom-key"),
+            std::path::PathBuf::from("/tmp/custom-key")
+        );
     }
 
     #[test]

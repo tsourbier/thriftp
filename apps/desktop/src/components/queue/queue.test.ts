@@ -65,6 +65,55 @@ describe("QueueManager", () => {
     expect(screen.getByText("b.bin")).toBeTruthy();
   });
 
+  it("hides completed transfers from the queue", () => {
+    render(QueueManager, {
+      props: {
+        transfers: [transfer("done", "completed"), transfer("pending", "pending")],
+        queue: queue(),
+        onpausequeue: vi.fn(),
+        onresumequeue: vi.fn(),
+        onsetconcurrency: vi.fn(),
+        onsetbandwidth: vi.fn(),
+        onreorder: vi.fn(),
+        onsetpriority: vi.fn(),
+        onpausetransfer: vi.fn(),
+        onresumetransfer: vi.fn(),
+        oncanceltransfer: vi.fn(),
+        oncancelall: vi.fn()
+      }
+    });
+
+    expect(screen.queryByText(/done\.bin/)).toBeNull();
+    expect(screen.getByText(/pending\.bin/)).toBeTruthy();
+  });
+
+  it("collapses and expands the queue panel", async () => {
+    render(QueueManager, {
+      props: {
+        transfers: [transfer("a")],
+        queue: queue(),
+        onpausequeue: vi.fn(),
+        onresumequeue: vi.fn(),
+        onsetconcurrency: vi.fn(),
+        onsetbandwidth: vi.fn(),
+        onreorder: vi.fn(),
+        onsetpriority: vi.fn(),
+        onpausetransfer: vi.fn(),
+        onresumetransfer: vi.fn(),
+        oncanceltransfer: vi.fn(),
+        oncancelall: vi.fn()
+      }
+    });
+
+    expect(screen.getByLabelText("Concurrent transfers")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+    expect(screen.queryByLabelText("Concurrent transfers")).toBeNull();
+    expect(screen.getByText("Queue")).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    expect(screen.getByLabelText("Concurrent transfers")).toBeTruthy();
+  });
+
   it("pauses and resumes the queue", async () => {
     const onpausequeue = vi.fn();
     const onresumequeue = vi.fn();

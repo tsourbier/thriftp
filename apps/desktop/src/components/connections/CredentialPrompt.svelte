@@ -2,16 +2,22 @@
   let {
     profileName,
     message,
+    secretKind = "password",
     onsubmit,
     oncancel
   }: {
     profileName: string;
     message?: string;
+    secretKind?: "password" | "passphrase";
     onsubmit: (secret: string) => void;
     oncancel: () => void;
   } = $props();
 
   let secret = $state("");
+  const label = $derived(secretKind === "passphrase" ? "SSH key passphrase" : "Password");
+  const title = $derived(
+    secretKind === "passphrase" ? "SSH key passphrase required" : "Credentials required"
+  );
 
   function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -22,14 +28,14 @@
   }
 </script>
 
-<form class="prompt" onsubmit={submit} aria-label="Credentials required">
-  <h2>Credentials required</h2>
-  <p>Enter the credential for <strong>{profileName}</strong>.</p>
+<form class="prompt" onsubmit={submit} aria-label={title}>
+  <h2>{title}</h2>
+  <p>Enter the {label.toLowerCase()} for <strong>{profileName}</strong>.</p>
   {#if message}
     <p class="message" role="alert">{message}</p>
   {/if}
   <label>
-    Credential
+    {label}
     <input type="password" bind:value={secret} autocomplete="current-password" required />
   </label>
   <div class="actions">

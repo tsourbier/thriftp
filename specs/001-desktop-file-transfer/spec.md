@@ -289,7 +289,7 @@ The user restarts the application after an unexpected exit or a network interrup
 - **FR-065**: The transfer manager MUST show transfer status and error information.
 - **FR-066**: Users MUST be able to cancel individual transfers and all pending transfers.
 - **FR-067**: The transfer manager MUST remain accessible while users browse files or manage connections.
-- **FR-068**: Completed and failed operations MUST remain clearly visible until the user dismisses them.
+- **FR-068**: Failed, cancelled, and interrupted operations MUST remain clearly visible until the user dismisses them. Completed transfers MUST be removed from the queue automatically once finalized, while the completion notification and transfer history remain available.
 
 **Permissions and File Information**
 

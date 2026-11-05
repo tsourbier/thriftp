@@ -175,6 +175,7 @@ pub async fn connections_create(
     profile: ConnectionProfile,
     secret: Option<String>,
 ) -> Result<ConnectionProfile, DesktopError> {
+    let has_secret = secret.is_some();
     let result = {
         let mut service = state.connections.lock().await;
         create(
@@ -186,6 +187,11 @@ pub async fn connections_create(
         .map_err(DesktopError::from)
     }?;
     state.persist_metadata().await.map_err(DesktopError::from)?;
+    if has_secret {
+        state
+            .register_credential_reference(&result)
+            .map_err(DesktopError::from)?;
+    }
     state
         .server_favorites
         .ensure_favorites()
@@ -207,6 +213,7 @@ pub async fn connections_update(
     profile: ConnectionProfile,
     secret: Option<String>,
 ) -> Result<ConnectionProfile, DesktopError> {
+    let has_secret = secret.is_some();
     if let Some(favorite_id) = state
         .server_favorites
         .favorite_id_for_profile(profile.id)
@@ -253,6 +260,11 @@ pub async fn connections_update(
         .map_err(DesktopError::from)
     }?;
     state.persist_metadata().await.map_err(DesktopError::from)?;
+    if has_secret {
+        state
+            .register_credential_reference(&result)
+            .map_err(DesktopError::from)?;
+    }
     state
         .server_favorites
         .ensure_favorites()

@@ -49,7 +49,9 @@
   <button type="button" onclick={onup} disabled={!canGoUp} title="Parent directory"
     >↑</button
   >
-  <button type="button" onclick={onrefresh} disabled={loading} title="Refresh">⟳</button>
+  <button type="button" onclick={onrefresh} disabled={loading} title="Refresh">
+    <span class="refresh-icon" aria-hidden="true">⟳</span>
+  </button>
   <BreadcrumbBar {path} hasLocation={Boolean(path)} {onnavigate} />
   <input
     class="filter"
@@ -94,5 +96,11 @@
   }
   button {
     font: inherit;
+  }
+  .refresh-icon {
+    display: inline-block;
+    font-size: 1.5em;
+    line-height: 1;
+    vertical-align: -0.1em;
   }
 </style>

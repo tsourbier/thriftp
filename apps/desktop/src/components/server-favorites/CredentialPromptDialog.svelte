@@ -24,12 +24,17 @@
         ? "Private key"
         : "Password"
   );
+  const requirement = $derived(
+    secretKind === "passphrase" ? "an SSH key passphrase" : "a password"
+  );
   const message = $derived(
     code === "credential_store_unavailable"
       ? `The operating-system credential store is unavailable. You can use a credential for ${favoriteName} for this session only.`
       : code === "credential_rejected"
-        ? `The server rejected the saved credential for ${favoriteName}. Enter a new credential.`
-        : `${favoriteName} needs a ${credentialLabel.toLowerCase()} before connecting.`
+        ? secretKind === "passphrase"
+          ? `The saved SSH key passphrase for ${favoriteName} was not accepted. Enter it again.`
+          : `The server rejected the saved credential for ${favoriteName}. Enter a new credential.`
+        : `${favoriteName} needs ${requirement} before connecting.`
   );
 </script>
 

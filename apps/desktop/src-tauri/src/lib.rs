@@ -51,6 +51,25 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Record the derived credential reference for a profile whose secret was
+    /// saved through the legacy connection commands.
+    pub fn register_credential_reference(
+        &self,
+        profile: &thriftp_core::model::ConnectionProfile,
+    ) -> thriftp_core::CoreResult<()> {
+        let reference = thriftp_core::model::CredentialRef::for_profile(profile);
+        let mut state = self.metadata_store.load()?;
+        if !state
+            .credential_refs
+            .iter()
+            .any(|existing| existing.id == reference.id)
+        {
+            state.credential_refs.push(reference);
+            self.metadata_store.save(&state)?;
+        }
+        Ok(())
+    }
+
     /// Persist profiles, favorites, tabs, and preference defaults.
     pub async fn persist_metadata(&self) -> thriftp_core::CoreResult<()> {
         let profiles = self.connections.lock().await.list_profiles();
@@ -243,6 +262,22 @@ pub fn run() {
             commands::favorites::directory_favorites_update,
             commands::favorites::directory_favorites_delete,
             commands::favorites::directory_favorites_reorder,
+            commands::server_favorites::favorites_list,
+            commands::server_favorites::favorites_get,
+            commands::server_favorites::favorites_create,
+            commands::server_favorites::favorites_update,
+            commands::server_favorites::favorites_delete,
+            commands::server_favorites::favorites_set_pinned,
+            commands::server_favorites::favorites_set_group,
+            commands::server_favorites::favorites_rename_group,
+            commands::server_favorites::favorites_get_preferences,
+            commands::server_favorites::favorites_set_preferences,
+            commands::server_favorites::favorites_test_connection,
+            commands::server_favorites::favorites_connect,
+            commands::server_favorites::credentials_get_impact,
+            commands::server_favorites::credentials_list_reusable,
+            commands::server_favorites::credentials_remove,
+            commands::server_favorites::credentials_delete,
             commands::tabs::tabs_list,
             commands::tabs::tabs_save,
             commands::tabs::tabs_restore,

@@ -2,7 +2,6 @@
   import { onMount, tick } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import ConnectionEditor from "./components/connections/ConnectionEditor.svelte";
-  import ConnectionStatus from "./components/connections/ConnectionStatus.svelte";
   import CredentialPrompt from "./components/connections/CredentialPrompt.svelte";
   import HostKeyPrompt from "./components/connections/HostKeyPrompt.svelte";
   import SecurityPrompt from "./components/connections/SecurityPrompt.svelte";
@@ -89,6 +88,7 @@
     code: string;
   } | null>(null);
   let securityProfile = $state<ConnectionProfile | null>(null);
+  let securityFavorite = $state<ServerFavoriteView | null>(null);
   let hostKeyRequest = $state<{
     profile: ConnectionProfile;
     favorite: ServerFavoriteView | null;
@@ -428,7 +428,7 @@
       (candidate) => candidate.id === entry.connectionProfileId
     );
     if (profile) {
-      await connectNow(profile);
+      await requestConnect(profile);
     } else {
       notice = {
         code: "not_found",
@@ -454,6 +454,7 @@
         Boolean(editor) ||
         Boolean(credentialRequest) ||
         Boolean(securityProfile) ||
+        Boolean(securityFavorite) ||
         Boolean(inspector) ||
         Boolean(serverFavoriteEditor) ||
         Boolean(serverFavoriteDraft) ||
@@ -522,8 +523,8 @@
     }
   }
 
-  async function requestConnect(profile: ConnectionProfile) {
-    if (profile.protocol === "ftp") {
+  async function requestConnect(profile: ConnectionProfile, confirmed = false) {
+    if (profile.protocol === "ftp" && !confirmed) {
       securityProfile = profile;
       return;
     }
@@ -603,45 +604,6 @@
     }
   }
 
-  async function confirmPlainFtp() {
-    const profile = securityProfile;
-    securityProfile = null;
-    if (profile) {
-      await connectNow(profile);
-    }
-  }
-
-  async function submitCredential(secret: string) {
-    const request = credentialRequest;
-    credentialRequest = null;
-    if (request) {
-      await connectNow(request.profile, secret);
-    }
-  }
-
-  async function reconnect(connection: ConnectionView) {
-    const profile = profiles.find((candidate) => candidate.id === connection.profileId);
-    if (!profile) {
-      notice = {
-        code: "not_found",
-        message: "The connection profile for this session no longer exists."
-      };
-      return;
-    }
-    try {
-      const replacement = await ipc.reconnect(connection.connectionId);
-      active = active.map((candidate) =>
-        candidate.connectionId === connection.connectionId ? replacement : candidate
-      );
-      selectedConnectionId = replacement.connectionId;
-      ensureTab(replacement);
-      notice = null;
-      void refreshHistory();
-    } catch (error) {
-      handleConnectionError(error, profile);
-    }
-  }
-
   async function disconnect(connection: ConnectionView) {
     try {
       await ipc.disconnect(connection.connectionId);
@@ -656,46 +618,23 @@
     }
   }
 
-  async function duplicateProfile(profile: ConnectionProfile) {
-    const now = new Date().toISOString();
-    const copy: ConnectionProfile = {
-      ...profile,
-      id: crypto.randomUUID(),
-      displayName: `${profile.displayName} (copy)`,
-      createdAt: now,
-      updatedAt: now,
-      lastUsedAt: null
-    };
-    try {
-      await ipc.createProfile(copy);
-      await Promise.all([refresh(), loadServerFavorites()]);
-    } catch (error) {
-      notice = detailsOf(error);
+  async function confirmPlainFtp() {
+    const profile = securityProfile;
+    const favorite = securityFavorite;
+    securityProfile = null;
+    securityFavorite = null;
+    if (favorite) {
+      await connectServerFavorite(favorite, true);
+    } else if (profile) {
+      await requestConnect(profile, true);
     }
   }
 
-  async function deleteProfile(profile: ConnectionProfile) {
-    if (
-      !(await confirmAction(
-        `Delete the saved connection "${profile.displayName}"?`,
-        "Delete connection"
-      ))
-    ) {
-      return;
-    }
-    try {
-      const favorite = $serverFavorites.find(
-        (candidate) => candidate.connectionProfileId === profile.id
-      );
-      if (favorite) {
-        await deleteServerFavorite(favorite);
-        return;
-      }
-      await ipc.deleteProfile(profile.id);
-      await refresh();
-      await loadServerFavorites();
-    } catch (error) {
-      notice = detailsOf(error);
+  async function submitCredential(secret: string) {
+    const request = credentialRequest;
+    credentialRequest = null;
+    if (request) {
+      await connectNow(request.profile, secret);
     }
   }
 
@@ -710,7 +649,15 @@
   }
 
   function credentialMessage() {
-    return credentialRequest?.code === "credential_rejected"
+    if (!credentialRequest) {
+      return undefined;
+    }
+    if (credentialRequest.profile.authMethod === "sshPrivateKey") {
+      return credentialRequest.code === "credential_rejected"
+        ? "That SSH key passphrase was not accepted. Try again."
+        : "This SSH key is protected by a passphrase. Enter it to connect.";
+    }
+    return credentialRequest.code === "credential_rejected"
       ? "The server rejected that credential. Try again."
       : undefined;
   }
@@ -819,9 +766,13 @@
   }
 
   async function dismissTransfer(transfer: TransferView) {
+    await dismissTransferById(transfer.id);
+  }
+
+  async function dismissTransferById(transferId: string) {
     try {
-      queue = await ipc.transfersDismiss(transfer.id);
-      transfers = transfers.filter((candidate) => candidate.id !== transfer.id);
+      queue = await ipc.transfersDismiss(transferId);
+      transfers = transfers.filter((candidate) => candidate.id !== transferId);
     } catch (error) {
       notice = detailsOf(error);
     }
@@ -915,7 +866,7 @@
       (candidate) => candidate.id === tab.connectionProfileId
     );
     if (profile) {
-      await connectNow(profile);
+      await requestConnect(profile);
     }
   }
 
@@ -1196,7 +1147,11 @@
     }
   }
 
-  async function connectServerFavorite(favorite: ServerFavoriteView) {
+  async function connectServerFavorite(favorite: ServerFavoriteView, confirmed = false) {
+    if (favorite.protocol === "ftp" && !confirmed) {
+      securityFavorite = favorite;
+      return;
+    }
     try {
       const connection = await connectServerFavoriteStore(
         favorite.id,
@@ -1392,17 +1347,6 @@
   {/if}
 
   <div class="workspace">
-    <ConnectionStatus
-      {profiles}
-      {active}
-      onconnect={requestConnect}
-      ondisconnect={disconnect}
-      onreconnect={reconnect}
-      onedit={(profile) => (editor = { profile })}
-      onduplicate={duplicateProfile}
-      ondelete={deleteProfile}
-    />
-
     <section class="server-favorites-panel" aria-label="Saved servers">
       {#if serverCredentialBanner}
         <CredentialUnavailableBanner
@@ -1479,6 +1423,15 @@
           <button type="button" onclick={() => void saveActiveAsFavorite()}>
             Save as favorite
           </button>
+          {#if selectedConnection}
+            <button
+              type="button"
+              class="danger"
+              onclick={() => void disconnect(selectedConnection)}
+            >
+              Disconnect
+            </button>
+          {/if}
         </div>
         {#if selectedConnection?.transportWarning}
           <p class="transport-warning" role="status">
@@ -1529,23 +1482,23 @@
           onremotepathchange={updateActiveTabPath}
         />
       </div>
+      <QueueManager
+        {transfers}
+        {queue}
+        onpausequeue={pauseQueue}
+        onresumequeue={resumeQueue}
+        onsetconcurrency={setConcurrency}
+        onsetbandwidth={setBandwidth}
+        onreorder={reorderTransfers}
+        onsetpriority={setPriority}
+        onpausetransfer={pauseTransfer}
+        onresumetransfer={resumeTransfer}
+        oncanceltransfer={cancelTransfer}
+        oncancelall={() => cancelAll(true)}
+        onclearhistory={clearHistory}
+        ondismiss={dismissTransfer}
+      />
     </div>
-    <QueueManager
-      {transfers}
-      {queue}
-      onpausequeue={pauseQueue}
-      onresumequeue={resumeQueue}
-      onsetconcurrency={setConcurrency}
-      onsetbandwidth={setBandwidth}
-      onreorder={reorderTransfers}
-      onsetpriority={setPriority}
-      onpausetransfer={pauseTransfer}
-      onresumetransfer={resumeTransfer}
-      oncanceltransfer={cancelTransfer}
-      oncancelall={() => cancelAll(true)}
-      onclearhistory={clearHistory}
-      ondismiss={dismissTransfer}
-    />
   </div>
 </main>
 
@@ -1617,6 +1570,9 @@
     <CredentialPrompt
       profileName={credentialRequest.profile.displayName}
       message={credentialMessage()}
+      secretKind={credentialRequest.profile.authMethod === "sshPrivateKey"
+        ? "passphrase"
+        : "password"}
       onsubmit={submitCredential}
       oncancel={() => (credentialRequest = null)}
     />
@@ -1847,7 +1803,7 @@
   </div>
 {/if}
 
-{#if securityProfile}
+{#if securityProfile || securityFavorite}
   <div
     class="modal"
     role="dialog"
@@ -1860,7 +1816,10 @@
       message="Plain FTP does not encrypt your credentials or file data. Continue only if you trust this network and server."
       confirmLabel="Connect anyway"
       onconfirm={confirmPlainFtp}
-      oncancel={() => (securityProfile = null)}
+      oncancel={() => {
+        securityProfile = null;
+        securityFavorite = null;
+      }}
     />
   </div>
 {/if}
@@ -1976,6 +1935,10 @@
     min-width: 0;
   }
   .connection-picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.5rem 0.75rem;
     border-bottom: 1px solid var(--border);
     font-size: 0.8rem;
@@ -1984,6 +1947,9 @@
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
+  }
+  .connection-picker .danger {
+    color: var(--danger-text, #8a0000);
   }
   .transport-warning {
     margin: 0;
