@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { FileEntryView } from "../../lib/ipc/types";
+  import type { FileEntryView, SortDirection, SortKey } from "../../lib/ipc/types";
 
   let {
     entries,
@@ -8,8 +8,11 @@
     selectedPath = null,
     selectedPaths = [],
     source = "local",
+    sortKey = "name",
+    sortDirection = "asc",
     onselect,
-    onopen
+    onopen,
+    onsort
   }: {
     entries: FileEntryView[];
     loading?: boolean;
@@ -17,9 +20,29 @@
     selectedPath?: string | null;
     selectedPaths?: string[];
     source?: "local" | "remote";
-    onselect: (entry: FileEntryView, additive?: boolean) => void;
+    sortKey?: SortKey;
+    sortDirection?: SortDirection;
+    onselect: (
+      entry: FileEntryView,
+      modifiers: { shift: boolean; toggle: boolean }
+    ) => void;
     onopen: (entry: FileEntryView) => void;
+    onsort?: (key: SortKey) => void;
   } = $props();
+
+  function ariaSort(key: SortKey): "ascending" | "descending" | "none" {
+    if (key !== sortKey) {
+      return "none";
+    }
+    return sortDirection === "asc" ? "ascending" : "descending";
+  }
+
+  function sortIndicator(key: SortKey): string {
+    if (key !== sortKey) {
+      return "";
+    }
+    return sortDirection === "asc" ? "▲" : "▼";
+  }
 
   const rowHeight = 28;
   let viewportHeight = $state(360);
@@ -87,9 +110,21 @@
 
 <div class="directory" aria-label="Directory contents">
   <div class="header" role="row">
-    <span>Name</span>
-    <span>Size</span>
-    <span>Modified</span>
+    <div role="columnheader" aria-sort={ariaSort("name")}>
+      <button type="button" onclick={() => onsort?.("name")}>
+        Name <span aria-hidden="true">{sortIndicator("name")}</span>
+      </button>
+    </div>
+    <div role="columnheader" aria-sort={ariaSort("size")}>
+      <button type="button" onclick={() => onsort?.("size")}>
+        Size <span aria-hidden="true">{sortIndicator("size")}</span>
+      </button>
+    </div>
+    <div role="columnheader" aria-sort={ariaSort("date")}>
+      <button type="button" onclick={() => onsort?.("date")}>
+        Modified <span aria-hidden="true">{sortIndicator("date")}</span>
+      </button>
+    </div>
   </div>
 
   {#if loading && entries.length === 0}
@@ -124,7 +159,10 @@
                 JSON.stringify({ source, path: entry.path, name: entry.name })
               )}
             onclick={(event) =>
-              onselect(entry, event.metaKey || event.ctrlKey || event.shiftKey)}
+              onselect(entry, {
+                shift: event.shiftKey,
+                toggle: event.metaKey || event.ctrlKey
+              })}
             ondblclick={() => onopen(entry)}
             onkeydown={(event) => {
               if (event.key === "Enter") {
@@ -166,6 +204,19 @@
     color: GrayText;
     border-bottom: 1px solid #d0d0d0;
     padding-bottom: 0.25rem;
+  }
+  .header button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+  }
+  .header button:hover {
+    color: var(--text);
   }
   .viewport {
     flex: 1;

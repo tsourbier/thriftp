@@ -254,11 +254,40 @@ struct TransferProgressPayload {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct TransferStatePayload {
-    transfer_id: String,
-    state: TransferState,
+pub struct TransferStatePayload {
+    pub transfer_id: String,
+    pub connection_profile_id: String,
+    pub direction: TransferDirection,
+    pub state: TransferState,
+    /// Authoritative bytes moved so far, including the final completion amount.
+    pub transferred_bytes: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<DesktopError>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<DateTime<Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Build the serializable state event payload for one transfer.
+#[must_use]
+pub fn transfer_state_payload(
+    transfer: &Transfer,
     error: Option<DesktopError>,
+) -> TransferStatePayload {
+    TransferStatePayload {
+        transfer_id: transfer.id.to_string(),
+        connection_profile_id: transfer.connection_profile_id.to_string(),
+        direction: transfer.direction,
+        state: transfer.state,
+        transferred_bytes: transfer.transferred_bytes,
+        total_bytes: transfer.total_bytes,
+        error,
+        started_at: transfer.started_at,
+        completed_at: transfer.completed_at,
+    }
 }
 
 fn parse_id(value: &str) -> CoreResult<Uuid> {
@@ -278,14 +307,7 @@ fn emit_queue_state(app: &AppHandle, queue: &TransferQueue) {
 }
 
 fn emit_state(app: &AppHandle, transfer: &Transfer, error: Option<DesktopError>) {
-    let _ = app.emit(
-        "transfer:state",
-        TransferStatePayload {
-            transfer_id: transfer.id.to_string(),
-            state: transfer.state,
-            error,
-        },
-    );
+    let _ = app.emit("transfer:state", transfer_state_payload(transfer, error));
 }
 
 async fn destination_exists(

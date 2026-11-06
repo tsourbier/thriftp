@@ -28,6 +28,8 @@ function favorite(): ServerFavoriteView {
     lastUsedAt: null,
     credentialPolicy: "ask",
     hasSavedCredential: false,
+    localPath: null,
+    remotePath: null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };

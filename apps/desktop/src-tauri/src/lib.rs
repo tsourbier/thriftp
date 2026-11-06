@@ -228,6 +228,8 @@ pub fn run() {
             commands::browser::browser_rename,
             commands::browser::browser_delete,
             commands::browser::browser_chmod,
+            commands::browser::browser_chmod_recursive,
+            commands::browser::browser_probe_directory,
             commands::browser::browser_resolve_path,
             commands::workspace::workspace_get,
             commands::workspace::workspace_set,

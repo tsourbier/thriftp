@@ -17,6 +17,7 @@ import type {
   PathResolution,
   PathSource,
   Preferences,
+  RecursivePermissionResult,
   PreviewOpenResult,
   PreviewReadResult,
   Priority,
@@ -108,6 +109,20 @@ export const ipc = {
     }),
   chmod: (connectionId: string, path: string, mode: number) =>
     call<FileEntryView>("browser_chmod", { connectionId, path, mode }),
+  chmodRecursive: (
+    connectionId: string,
+    path: string,
+    mode: number,
+    confirmed: boolean
+  ) =>
+    call<RecursivePermissionResult>("browser_chmod_recursive", {
+      connectionId,
+      path,
+      mode,
+      confirmed
+    }),
+  probeDirectory: (source: BrowserSource, path: string, connectionId?: string) =>
+    call<boolean>("browser_probe_directory", { source, path, connectionId }),
   resolvePath: (source: PathSource, path: string, connectionId?: string) =>
     call<PathResolution>("browser_resolve_path", { source, path, connectionId }),
 
@@ -277,6 +292,7 @@ export type {
   PathResolution,
   PathSource,
   Preferences,
+  RecursivePermissionResult,
   PreviewOpenResult,
   PreviewReadResult,
   Priority,

@@ -1,6 +1,7 @@
 export type Protocol = "ftp" | "ftpsExplicit" | "ftpsImplicit" | "sftp";
 export type AuthMethod = "password" | "sshPrivateKey";
 export type SortKey = "name" | "size" | "date" | "type";
+export type SortDirection = "asc" | "desc";
 export type BrowserSource = "local" | "remote";
 export type Theme = "system" | "light" | "dark";
 export type PreviewPreference = "auto" | "native" | "internal";
@@ -13,6 +14,7 @@ export type Preferences = {
   restoreTabs: boolean;
   previewMode: PreviewPreference;
   sortKey: SortKey;
+  sortDirection: SortDirection;
   reducedMotion: boolean;
 };
 
@@ -167,8 +169,14 @@ export type TransferProgressEvent = {
 
 export type TransferStateEvent = {
   transferId: string;
+  connectionProfileId: string;
+  direction: TransferDirection;
   state: TransferState;
+  transferredBytes: number;
+  totalBytes?: number | null;
   error?: DesktopError;
+  startedAt?: string | null;
+  completedAt?: string | null;
 };
 
 export type ConflictPolicy = "ask" | "overwrite" | "skip" | "rename";
@@ -185,6 +193,7 @@ export type DirectoryFavorite = {
 
 export type ViewSettings = {
   sortKey: SortKey;
+  sortDirection: SortDirection;
   showHidden: boolean;
   filter?: string | null;
 };
@@ -203,10 +212,40 @@ export type BrowsingSession = {
   restored: boolean;
 };
 
+export type PermissionBits = {
+  read: boolean;
+  write: boolean;
+  execute: boolean;
+};
+
+export type PermissionDetail = {
+  mode: number | null;
+  symbolic: string | null;
+  user: PermissionBits;
+  group: PermissionBits;
+  world: PermissionBits;
+  editable: boolean;
+  reason?: string | null;
+};
+
 export type FileMetadata = {
   entry: FileEntryView;
   permissionsSupported: boolean;
   ownershipSupported: boolean;
+  permissionDetail: PermissionDetail | null;
+};
+
+export type RecursivePermissionFailure = {
+  path: string;
+  message: string;
+};
+
+export type RecursivePermissionResult = {
+  root: string;
+  changed: number;
+  skipped: number;
+  failed: RecursivePermissionFailure[];
+  message?: string | null;
 };
 
 export type CredentialPolicy = "save" | "ask";

@@ -85,9 +85,12 @@ describe("browser view helpers", () => {
 
   it("combines filtering and sorting", () => {
     expect(
-      visibleEntries(entries, { sortKey: "name", showHidden: false, filter: "" }).map(
-        (e) => e.name
-      )
+      visibleEntries(entries, {
+        sortKey: "name",
+        sortDirection: "asc",
+        showHidden: false,
+        filter: ""
+      }).map((e) => e.name)
     ).toEqual(["Alpha", "beta.txt"]);
   });
 });
@@ -154,12 +157,37 @@ describe("browser keyboard navigation", () => {
     expect(
       handleBrowserKey(new KeyboardEvent("keydown", { key: "ArrowDown" }), base)
     ).toBe(true);
-    expect(base.onselect).toHaveBeenCalledWith(entries[1]);
+    expect(base.onselect).toHaveBeenCalledWith(entries[1], {
+      shift: false,
+      toggle: false
+    });
 
     expect(handleBrowserKey(new KeyboardEvent("keydown", { key: "Enter" }), base)).toBe(
       true
     );
     expect(base.onopen).toHaveBeenCalledWith(entries[0]);
+  });
+
+  it("reports Shift and Cmd/Ctrl modifiers for keyboard selection", () => {
+    const actions = { ...base, onselect: vi.fn() };
+
+    handleBrowserKey(
+      new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true }),
+      actions
+    );
+    expect(actions.onselect).toHaveBeenLastCalledWith(entries[1], {
+      shift: true,
+      toggle: false
+    });
+
+    handleBrowserKey(
+      new KeyboardEvent("keydown", { key: "ArrowUp", ctrlKey: true }),
+      actions
+    );
+    expect(actions.onselect).toHaveBeenLastCalledWith(entries[0], {
+      shift: false,
+      toggle: true
+    });
   });
 
   it("handles navigation, refresh, hidden toggle, and delete", () => {

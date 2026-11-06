@@ -78,8 +78,14 @@
 
 <style>
   .edit-favorite {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
+    max-height: 85vh;
+    min-height: 0;
+  }
+  .edit-favorite > :global(.save-favorite) {
+    min-height: 0;
   }
   .warning {
     color: var(--server-favorites-warning, #9a6700);

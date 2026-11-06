@@ -52,7 +52,7 @@ function tab(overrides: Partial<BrowsingSession> = {}): BrowsingSession {
     currentPath: "/srv/www",
     history: ["/srv/www"],
     historyIndex: 0,
-    viewSettings: { sortKey: "name", showHidden: false },
+    viewSettings: { sortKey: "name", sortDirection: "asc", showHidden: false },
     selectedItems: [],
     createdAt: "2026-11-05T00:00:00Z",
     restored: false,

@@ -1,7 +1,11 @@
-import type { FileEntryView, SortKey } from "../ipc/types";
+import type { FileEntryView, SortDirection, SortKey } from "../ipc/types";
 
-export function sortEntries(entries: FileEntryView[], key: SortKey): FileEntryView[] {
-  return [...entries].sort((left, right) => {
+export function sortEntries(
+  entries: FileEntryView[],
+  key: SortKey,
+  direction: SortDirection = "asc"
+): FileEntryView[] {
+  const sorted = [...entries].sort((left, right) => {
     let comparison: number;
     switch (key) {
       case "size":
@@ -22,6 +26,7 @@ export function sortEntries(entries: FileEntryView[], key: SortKey): FileEntryVi
     }
     return comparison || left.name.localeCompare(right.name);
   });
+  return direction === "asc" ? sorted : sorted.reverse();
 }
 
 export function filterEntries(
@@ -39,7 +44,15 @@ export function filterEntries(
 
 export function visibleEntries(
   entries: FileEntryView[],
-  options: { sortKey: SortKey; showHidden: boolean; filter: string }
+  options: {
+    sortKey: SortKey;
+    sortDirection: SortDirection;
+    showHidden: boolean;
+    filter: string;
+  }
 ): FileEntryView[] {
-  return filterEntries(sortEntries(entries, options.sortKey), options);
+  return filterEntries(
+    sortEntries(entries, options.sortKey, options.sortDirection),
+    options
+  );
 }

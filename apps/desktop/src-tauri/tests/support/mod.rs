@@ -16,8 +16,12 @@ use tempfile::TempDir;
 use thriftp_core::credentials::{
     CredentialAvailability, CredentialService, CredentialStore, CredentialStoreError, Secret,
 };
+use thriftp_core::browser::permissions::{RecursivePermissionFailure, RecursivePermissionResult};
 use thriftp_core::error::{CoreError, CoreResult};
-use thriftp_core::model::{AuthMethod, CredentialPolicy, CredentialRef, Protocol, ServerFavorite};
+use thriftp_core::model::{
+    AuthMethod, CredentialPolicy, CredentialRef, Protocol, ServerFavorite, Transfer,
+    TransferDirection,
+};
 use thriftp_core::repository::{AppState, MetadataStore};
 use thriftp_core::server_favorites::{
     ServerFavoriteInput, ServerFavoriteService, ServerFavoriteView,
@@ -311,4 +315,31 @@ pub fn seed_dependent_data(app: &TestApp, profile_id: uuid::Uuid, keep_profile_i
         "/keep",
     ));
     app.save_state(&state);
+}
+
+/// Fixture for the recursive permission command contract.
+#[must_use]
+pub fn recursive_permission_result_fixture() -> RecursivePermissionResult {
+    RecursivePermissionResult {
+        root: "/srv/www".to_owned(),
+        changed: 2,
+        skipped: 1,
+        failed: vec![RecursivePermissionFailure {
+            path: "/srv/www/locked".to_owned(),
+            message: "permission denied".to_owned(),
+        }],
+        message: None,
+    }
+}
+
+/// Fixture for the transfer-state event contract.
+#[must_use]
+pub fn transfer_fixture(direction: TransferDirection, total_bytes: u64) -> Transfer {
+    Transfer::new(
+        direction,
+        uuid::Uuid::nil(),
+        "/remote/file.bin",
+        "/local/file.bin",
+        Some(total_bytes),
+    )
 }

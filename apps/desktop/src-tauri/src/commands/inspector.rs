@@ -2,10 +2,22 @@ use tauri::State;
 use thriftp_core::browser::metadata::{FileMetadata, metadata_from_entry, metadata_remote};
 use thriftp_core::browser::{self};
 use thriftp_core::error::CoreError;
+use thriftp_core::model::FileEntry;
 use uuid::Uuid;
 
 use crate::AppState;
 use crate::error::DesktopError;
+
+/// Normalize inspector metadata and force local permission detail read-only.
+#[must_use]
+pub fn prepare_metadata(entry: &FileEntry, local: bool) -> FileMetadata {
+    let mut metadata = metadata_from_entry(entry);
+    if local && let Some(detail) = metadata.permission_detail.as_mut() {
+        detail.editable = false;
+        detail.reason = Some("Local permissions are read-only.".to_owned());
+    }
+    metadata
+}
 
 #[tauri::command]
 pub async fn inspector_get(
@@ -18,7 +30,7 @@ pub async fn inspector_get(
         "local" => {
             let entry =
                 browser::stat_local(std::path::Path::new(&path)).map_err(DesktopError::from)?;
-            Ok(metadata_from_entry(&entry))
+            Ok(prepare_metadata(&entry, true))
         }
         "remote" => {
             let connection_id = Uuid::parse_str(connection_id.as_deref().unwrap_or_default())

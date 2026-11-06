@@ -8,13 +8,9 @@
     showHidden = $bindable(false),
     filter = $bindable(""),
     canGoUp = true,
-    canGoBack = false,
-    canGoForward = false,
     loading = false,
     onnavigate,
     onup,
-    onback,
-    onforward,
     onrefresh,
     onsort
   }: {
@@ -23,13 +19,9 @@
     showHidden?: boolean;
     filter?: string;
     canGoUp?: boolean;
-    canGoBack?: boolean;
-    canGoForward?: boolean;
     loading?: boolean;
     onnavigate: (path: string) => void;
     onup: () => void;
-    onback: () => void;
-    onforward: () => void;
     onrefresh: () => void;
     onsort: (key: SortKey) => void;
   } = $props();
@@ -42,14 +34,20 @@
 </script>
 
 <div class="toolbar" role="toolbar" aria-label="Browser controls">
-  <button type="button" onclick={onback} disabled={!canGoBack} title="Back">←</button>
-  <button type="button" onclick={onforward} disabled={!canGoForward} title="Forward"
-    >→</button
+  <button
+    type="button"
+    onclick={onup}
+    disabled={!canGoUp}
+    title="Parent directory"
+    aria-label="Parent directory">↑</button
   >
-  <button type="button" onclick={onup} disabled={!canGoUp} title="Parent directory"
-    >↑</button
+  <button
+    type="button"
+    onclick={onrefresh}
+    disabled={loading}
+    title="Refresh"
+    aria-label="Refresh"
   >
-  <button type="button" onclick={onrefresh} disabled={loading} title="Refresh">
     <span class="refresh-icon" aria-hidden="true">⟳</span>
   </button>
   <BreadcrumbBar {path} hasLocation={Boolean(path)} {onnavigate} />

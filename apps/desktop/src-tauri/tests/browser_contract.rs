@@ -1,9 +1,13 @@
+mod support;
+
 use chrono::Utc;
 use thriftp_core::browser::listing::{ListingBatch, ListingState};
 use thriftp_core::error::CoreError;
 use thriftp_core::model::{EntryType, FileEntry, ProtocolCapabilities};
 
-use thriftp_desktop_lib::commands::browser::{DirectoryErrorPayload, batch_payload};
+use thriftp_desktop_lib::commands::browser::{
+    DirectoryErrorPayload, batch_payload, probe_local_directory, require_recursive_confirmation,
+};
 use thriftp_desktop_lib::error::DesktopError;
 
 fn entry() -> FileEntry {
@@ -59,6 +63,31 @@ fn partial_batches_omit_timestamps_until_available() {
     let json = serde_json::to_value(payload).unwrap();
     assert!(json.get("firstEntryAt").is_none());
     assert!(json.get("completedAt").is_none());
+}
+
+#[test]
+fn local_directory_probes_report_readability() {
+    let directory = tempfile::tempdir().unwrap();
+    assert!(probe_local_directory(directory.path()));
+    assert!(!probe_local_directory(&directory.path().join("missing")));
+}
+
+#[test]
+fn recursive_permission_changes_require_confirmation() {
+    let error = require_recursive_confirmation(false).unwrap_err();
+    assert_eq!(error.code, "conflict");
+    assert!(require_recursive_confirmation(true).is_ok());
+}
+
+#[test]
+fn recursive_permission_results_serialize_changed_skipped_and_failed() {
+    let json = serde_json::to_value(support::recursive_permission_result_fixture()).unwrap();
+    assert_eq!(json["root"], "/srv/www");
+    assert_eq!(json["changed"], 2);
+    assert_eq!(json["skipped"], 1);
+    assert_eq!(json["failed"][0]["path"], "/srv/www/locked");
+    assert_eq!(json["failed"][0]["message"], "permission denied");
+    assert!(json.get("message").is_none());
 }
 
 #[test]

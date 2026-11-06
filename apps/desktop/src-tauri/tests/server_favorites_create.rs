@@ -29,6 +29,32 @@ fn favorites_create_accepts_camel_case_payload_and_returns_a_secret_free_view() 
 }
 
 #[test]
+fn favorites_create_and_update_persist_remote_paths() {
+    let app = TestApp::new();
+    let mut input = favorite_input("with-path");
+    input.remote_path = Some("/srv/www".to_owned());
+    let created = app.create(input, CredentialPolicy::Ask, None, None).unwrap();
+    assert_eq!(created.remote_path.as_deref(), Some("/srv/www"));
+
+    let mut updated = favorite_input("with-path");
+    updated.remote_path = Some("/srv/app".to_owned());
+    app.service
+        .update(
+            created.id,
+            updated,
+            CredentialPolicy::Ask,
+            None,
+            None,
+            app.credentials(),
+        )
+        .unwrap();
+    assert_eq!(
+        app.service.get(created.id).unwrap().remote_path.as_deref(),
+        Some("/srv/app")
+    );
+}
+
+#[test]
 fn favorites_create_rejects_invalid_profiles_with_a_stable_validation_code() {
     let app = TestApp::new();
     let mut input = favorite_input("bad");

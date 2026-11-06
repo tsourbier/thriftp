@@ -2,7 +2,7 @@ use std::fs;
 
 use serde_json::json;
 use tempfile::TempDir;
-use thriftp_core::model::{HubTab, WorkspaceLayout};
+use thriftp_core::model::{BrowsingSession, HubTab, SortDirection, WorkspaceLayout};
 use thriftp_core::repository::{AppState, MetadataStore};
 use thriftp_storage_json::JsonMetadataStore;
 
@@ -42,6 +42,35 @@ fn version_two_round_trips_layout_and_history() {
     let loaded = store.load().unwrap();
     assert_eq!(loaded.workspace_layout.split_ratio, 0.65);
     assert_eq!(loaded.workspace_layout.hub_tab, HubTab::History);
+}
+
+#[test]
+fn missing_sort_directions_default_to_ascending() {
+    let home = TempDir::new().unwrap();
+    let path = home.path().join("metadata.json");
+    let store = JsonMetadataStore::new(path.clone());
+    let mut state = AppState::default();
+    state.tabs.push(BrowsingSession::new(None, "."));
+    store.save(&state).unwrap();
+
+    let mut document: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    document["tabs"][0]["viewSettings"]
+        .as_object_mut()
+        .unwrap()
+        .remove("sortDirection");
+    document["preference"]
+        .as_object_mut()
+        .unwrap()
+        .remove("sortDirection");
+    fs::write(&path, serde_json::to_vec_pretty(&document).unwrap()).unwrap();
+
+    let loaded = store.load().unwrap();
+    assert_eq!(
+        loaded.tabs[0].view_settings.sort_direction,
+        SortDirection::Asc
+    );
+    assert_eq!(loaded.preference.sort_direction, SortDirection::Asc);
 }
 
 #[test]

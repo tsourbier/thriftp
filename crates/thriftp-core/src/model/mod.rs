@@ -14,7 +14,7 @@ pub mod transfer;
 pub mod workspace;
 
 pub use active::ActiveConnection;
-pub use browsing::{BrowsingSession, SortKey, ViewSettings};
+pub use browsing::{BrowsingSession, SortDirection, SortKey, ViewSettings};
 pub use credential::CredentialRef;
 pub use favorite::DirectoryFavorite;
 pub use file::{EntryType, FileEntry, Ownership, ProtocolCapabilities};

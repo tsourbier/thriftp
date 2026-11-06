@@ -18,7 +18,12 @@ function tab(
     currentPath: path,
     history: [path],
     historyIndex: 0,
-    viewSettings: { sortKey: "name", showHidden: false, filter: null },
+    viewSettings: {
+      sortKey: "name",
+      sortDirection: "asc",
+      showHidden: false,
+      filter: null
+    },
     selectedItems: [],
     createdAt: new Date().toISOString(),
     restored: false

@@ -65,6 +65,39 @@ describe("QueueManager", () => {
     expect(screen.getByText("b.bin")).toBeTruthy();
   });
 
+  it("shows per-connection statistics", () => {
+    render(QueueManager, {
+      props: {
+        transfers: [],
+        queue: queue(),
+        connectionStats: [
+          {
+            connectionId: "connection-1",
+            connectionProfileId: "profile-1",
+            displayName: "Alpha",
+            completedFiles: 3,
+            completedBytes: 2048,
+            averageBytesPerSecond: 1024
+          }
+        ],
+        onpausequeue: vi.fn(),
+        onresumequeue: vi.fn(),
+        onsetconcurrency: vi.fn(),
+        onsetbandwidth: vi.fn(),
+        onreorder: vi.fn(),
+        onsetpriority: vi.fn(),
+        onpausetransfer: vi.fn(),
+        onresumetransfer: vi.fn(),
+        oncanceltransfer: vi.fn(),
+        oncancelall: vi.fn()
+      }
+    });
+
+    expect(screen.getByLabelText("Connection transfer statistics")).toBeTruthy();
+    expect(screen.getByText("Alpha")).toBeTruthy();
+    expect(screen.getByText(/3 files .* 2\.0 KB .* 1\.0 KB\/s/)).toBeTruthy();
+  });
+
   it("hides completed transfers from the queue", () => {
     render(QueueManager, {
       props: {

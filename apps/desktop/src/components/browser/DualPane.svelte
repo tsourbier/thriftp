@@ -8,6 +8,11 @@
   import { confirmAction } from "../../lib/dialogs/confirm";
   import { IpcError, ipc } from "../../lib/ipc/client";
   import { openListing, releaseListing } from "../../lib/browser/listings";
+  import {
+    applyRelativeNavigation,
+    relativeNavigation
+  } from "../../lib/browser/linked-navigation";
+  import { applySelection, pruneSelection } from "../../lib/browser/selection";
   import { handleBrowserKey } from "../../lib/keyboard/browser";
   import { visibleEntries } from "../../lib/browser/view";
   import { applySplitKey, clampSplit } from "../../lib/workspace/layout";
@@ -16,6 +21,7 @@
     ConflictPolicy,
     DirectoryBatchPayload,
     FileEntryView,
+    SortDirection,
     SortKey
   } from "../../lib/ipc/types";
 
@@ -29,7 +35,9 @@
     error: string | null;
     selectedPath: string | null;
     selectedPaths: string[];
+    selectionAnchor: string | null;
     sortKey: SortKey;
+    sortDirection: SortDirection;
     showHidden: boolean;
     filter: string;
     history: string[];
@@ -42,12 +50,17 @@
     profileId = null,
     remotePath = null,
     localPath = ".",
+    linked = false,
+    tabId = null,
     localSelectedItems = [],
     remoteSelectedItems = [],
     defaultShowHidden = false,
     defaultSortKey = "name",
+    defaultSortDirection = "asc",
+    defaultFilter = "",
     splitRatio = $bindable(0.5),
     onsplitcommit,
+    ondisconnect,
     remoteFallback,
     refreshSignal = 0,
     onpreview,
@@ -62,12 +75,17 @@
     profileId?: string | null;
     remotePath?: string | null;
     localPath?: string;
+    linked?: boolean;
+    tabId?: string | null;
     localSelectedItems?: string[];
     remoteSelectedItems?: string[];
     defaultShowHidden?: boolean;
     defaultSortKey?: SortKey;
+    defaultSortDirection?: SortDirection;
+    defaultFilter?: string;
     splitRatio?: number;
     onsplitcommit?: (ratio: number) => void;
+    ondisconnect?: () => void;
     remoteFallback?: Snippet;
     refreshSignal?: number;
     onpreview?: (entry: FileEntryView, source: BrowserSource) => void;
@@ -78,6 +96,7 @@
     onselectionchange?: (source: BrowserSource, paths: string[]) => void;
     onviewchange?: (settings: {
       sortKey: SortKey;
+      sortDirection: SortDirection;
       showHidden: boolean;
       filter: string;
     }) => void;
@@ -94,9 +113,11 @@
       error: null,
       selectedPath: null,
       selectedPaths: [],
+      selectionAnchor: null,
       sortKey: defaultSortKey,
+      sortDirection: defaultSortDirection,
       showHidden: defaultShowHidden,
-      filter: "",
+      filter: defaultFilter,
       history: [path],
       historyIndex: 0
     };
@@ -106,17 +127,20 @@
     untrack(() => ({
       ...pane("local", localPath),
       selectedPaths: localSelectedItems,
-      selectedPath: localSelectedItems[0] ?? null
+      selectedPath: localSelectedItems[0] ?? null,
+      selectionAnchor: localSelectedItems[0] ?? null
     }))
   );
   let remote = $state<PaneState>(
     untrack(() => ({
       ...pane("remote", "."),
       selectedPaths: remoteSelectedItems,
-      selectedPath: remoteSelectedItems[0] ?? null
+      selectedPath: remoteSelectedItems[0] ?? null,
+      selectionAnchor: remoteSelectedItems[0] ?? null
     }))
   );
   let activePane = $state<BrowserSource>("local");
+  let appliedTabId: string | null = untrack(() => tabId);
   let conflict = $state<{
     direction: "upload" | "download";
     sourcePaths: string[];
@@ -138,17 +162,29 @@
     state.state = batch.state;
     if (batch.state === "complete") {
       state.loading = false;
+      const pruned = pruneSelection(state.entries, {
+        selectedPaths: state.selectedPaths,
+        anchorPath: state.selectionAnchor,
+        activePath: state.selectedPath
+      });
+      state.selectedPaths = pruned.selectedPaths;
+      state.selectionAnchor = pruned.anchorPath;
+      state.selectedPath = pruned.activePath;
+      onselectionchange?.(state.source, state.selectedPaths);
     }
   }
 
-  async function load(state: PaneState) {
+  async function load(state: PaneState, preserveSelection = true) {
     const previous = state.listingId;
     state.entries = [];
     state.loading = true;
     state.error = null;
     state.state = "pending";
-    state.selectedPath = null;
-    state.selectedPaths = [];
+    if (!preserveSelection) {
+      state.selectedPath = null;
+      state.selectedPaths = [];
+      state.selectionAnchor = null;
+    }
     if (previous) {
       releaseListing(previous);
       void ipc.cancelListing(previous).catch(() => undefined);
@@ -176,11 +212,78 @@
     }
   }
 
-  function navigate(state: PaneState, path: string, record = true) {
+  function otherPane(state: PaneState) {
+    return state.source === "local" ? remote : local;
+  }
+
+  async function locationIsDirectory(state: PaneState, path: string) {
+    if (state.source === "remote" && !connectionId) {
+      return false;
+    }
+    try {
+      const entry = await ipc.stat(
+        state.source,
+        path,
+        state.source === "remote" ? (connectionId ?? undefined) : undefined
+      );
+      if (entry.entryType !== "directory") {
+        return false;
+      }
+      return await ipc.probeDirectory(
+        state.source,
+        path,
+        state.source === "remote" ? (connectionId ?? undefined) : undefined
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  async function mirrorTransition(
+    source: PaneState,
+    transition: { up: number; down: string[] }
+  ) {
+    if (!linked) {
+      return;
+    }
+    const target = otherPane(source);
+    const destination = applyRelativeNavigation(target.path, transition);
+    if (!destination || !(await locationIsDirectory(target, destination))) {
+      return;
+    }
+    navigate(target, destination, true, false);
+  }
+
+  function mirrorNavigation(source: PaneState, destination: string) {
+    if (!linked) {
+      return;
+    }
+    const transition = relativeNavigation(source.path, destination);
+    if (transition) {
+      void mirrorTransition(source, transition);
+    }
+  }
+
+  function mirrorHistory(source: PaneState, direction: "back" | "forward") {
+    if (!linked) {
+      return;
+    }
+    const target = otherPane(source);
+    if (direction === "back") {
+      back(target, false);
+    } else {
+      forward(target, false);
+    }
+  }
+
+  function navigate(state: PaneState, path: string, record = true, mirror = true) {
     if (record && path !== state.path) {
       state.history = state.history.slice(0, state.historyIndex + 1);
       state.history.push(path);
       state.historyIndex = state.history.length - 1;
+    }
+    if (mirror && linked && path !== state.path) {
+      mirrorNavigation(state, path);
     }
     state.path = path;
     if (state.source === "remote") {
@@ -188,32 +291,36 @@
     } else {
       onlocalpathchange?.(path);
     }
-    void load(state);
+    void load(state, false);
   }
 
-  function back(state: PaneState) {
+  function back(state: PaneState, mirror = true) {
     if (state.historyIndex <= 0) {
       return;
     }
     state.historyIndex -= 1;
-    navigate(state, state.history[state.historyIndex], false);
+    navigate(state, state.history[state.historyIndex], false, false);
+    if (mirror) {
+      mirrorHistory(state, "back");
+    }
   }
 
-  function forward(state: PaneState) {
+  function forward(state: PaneState, mirror = true) {
     if (state.historyIndex + 1 >= state.history.length) {
       return;
     }
     state.historyIndex += 1;
-    navigate(state, state.history[state.historyIndex], false);
+    navigate(state, state.history[state.historyIndex], false, false);
+    if (mirror) {
+      mirrorHistory(state, "forward");
+    }
   }
 
   function up(state: PaneState) {
-    const normalized = state.path.replace(/\/+$/, "");
-    if (normalized === "" || normalized === "/" || normalized === ".") {
-      return;
+    const parent = applyRelativeNavigation(state.path, { up: 1, down: [] });
+    if (parent && parent !== state.path) {
+      navigate(state, parent);
     }
-    const index = normalized.lastIndexOf("/");
-    navigate(state, index <= 0 ? "/" : normalized.slice(0, index));
   }
 
   function openEntry(state: PaneState, entry: FileEntryView) {
@@ -435,15 +542,36 @@
     return error instanceof Error ? error.message : String(error);
   }
 
-  function selectEntry(state: PaneState, entry: FileEntryView, additive = false) {
-    if (additive) {
-      state.selectedPaths = state.selectedPaths.includes(entry.path)
-        ? state.selectedPaths.filter((path) => path !== entry.path)
-        : [...state.selectedPaths, entry.path];
+  function changeSort(state: PaneState, key: SortKey) {
+    if (state.sortKey === key) {
+      state.sortDirection = state.sortDirection === "asc" ? "desc" : "asc";
     } else {
-      state.selectedPaths = [entry.path];
+      state.sortKey = key;
+      state.sortDirection = "asc";
     }
-    state.selectedPath = entry.path;
+  }
+
+  function selectEntry(
+    state: PaneState,
+    entry: FileEntryView,
+    modifiers: { shift: boolean; toggle: boolean } = {
+      shift: false,
+      toggle: false
+    }
+  ) {
+    const selection = applySelection(
+      visibleEntries(state.entries, state),
+      {
+        selectedPaths: state.selectedPaths,
+        anchorPath: state.selectionAnchor,
+        activePath: state.selectedPath
+      },
+      entry,
+      modifiers
+    );
+    state.selectedPaths = selection.selectedPaths;
+    state.selectionAnchor = selection.anchorPath;
+    state.selectedPath = selection.activePath;
     onselectionchange?.(state.source, state.selectedPaths);
   }
 
@@ -452,14 +580,14 @@
     const handled = handleBrowserKey(event, {
       entries,
       selectedPath: state.selectedPath,
-      onselect: (entry) => selectEntry(state, entry),
+      onselect: (entry, modifiers) => selectEntry(state, entry, modifiers),
       onopen: (entry) => openEntry(state, entry),
       onup: () => up(state),
       onback: () => back(state),
       onforward: () => forward(state),
       onrefresh: () => void load(state),
       ontoggleHidden: () => (state.showHidden = !state.showHidden),
-      onsort: (key) => (state.sortKey = key),
+      onsort: (key) => changeSort(state, key),
       ondelete: (entry) => {
         state.selectedPath = entry.path;
         void deleteSelected(state);
@@ -480,10 +608,33 @@
   }
 
   $effect(() => {
+    const id = tabId;
+    untrack(() => {
+      if (!id || id === appliedTabId) {
+        return;
+      }
+      appliedTabId = id;
+      remote.sortKey = defaultSortKey;
+      remote.sortDirection = defaultSortDirection;
+      remote.showHidden = defaultShowHidden;
+      remote.filter = defaultFilter;
+    });
+  });
+
+  let connectionApplied = false;
+  let appliedConnectionId: string | null = null;
+  $effect(() => {
     const id = connectionId;
     untrack(() => {
+      if (connectionApplied && id === appliedConnectionId) {
+        return;
+      }
+      connectionApplied = true;
+      appliedConnectionId = id;
       if (id) {
         remote.path = remotePath || ".";
+        remote.history = [remote.path];
+        remote.historyIndex = 0;
         void load(remote);
       } else {
         remote.entries = [];
@@ -497,8 +648,15 @@
     const path = remotePath;
     untrack(() => {
       if (path && connectionId && path !== remote.path) {
+        const previous = remote.path;
         remote.path = path;
-        void load(remote);
+        remote.history = [path];
+        remote.historyIndex = 0;
+        void load(remote, false);
+        const transition = relativeNavigation(previous, path);
+        if (transition) {
+          void mirrorTransition(remote, transition);
+        }
       }
     });
   });
@@ -507,10 +665,21 @@
     const path = localPath;
     untrack(() => {
       if (path && path !== local.path) {
+        // While linked, the remote pane is the navigation origin. Let the
+        // remote transition drive the local pane so a tab or favorite that
+        // changes both paths produces exactly one mirror operation.
+        if (linked) {
+          return;
+        }
+        const previous = local.path;
         local.path = path;
         local.history = [path];
         local.historyIndex = 0;
-        void load(local);
+        void load(local, false);
+        const transition = relativeNavigation(previous, path);
+        if (transition) {
+          void mirrorTransition(local, transition);
+        }
       }
     });
   });
@@ -527,6 +696,7 @@
     }
     onviewchange?.({
       sortKey: remote.sortKey,
+      sortDirection: remote.sortDirection,
       showHidden: remote.showHidden,
       filter: remote.filter
     });
@@ -630,13 +800,9 @@
       bind:showHidden={local.showHidden}
       bind:filter={local.filter}
       canGoUp={local.path !== "/" && local.path !== "."}
-      canGoBack={local.historyIndex > 0}
-      canGoForward={local.historyIndex + 1 < local.history.length}
       loading={local.loading}
       onnavigate={(path) => navigate(local, path)}
       onup={() => up(local)}
-      onback={() => back(local)}
-      onforward={() => forward(local)}
       onrefresh={() => void load(local)}
       onsort={(key) => (local.sortKey = key)}
     />
@@ -655,8 +821,11 @@
         selectedPath={local.selectedPath}
         selectedPaths={local.selectedPaths}
         source="local"
-        onselect={(entry, additive) => selectEntry(local, entry, additive)}
+        sortKey={local.sortKey}
+        sortDirection={local.sortDirection}
+        onselect={(entry, modifiers) => selectEntry(local, entry, modifiers)}
         onopen={(entry) => openEntry(local, entry)}
+        onsort={(key) => changeSort(local, key)}
       />
     </div>
   </section>
@@ -685,7 +854,14 @@
     ondrop={(event) => void dropOn(event, remote)}
   >
     <div class="pane-heading">
-      <h2>Remote {connectionLabel ? `· ${connectionLabel}` : ""}</h2>
+      <div class="pane-title">
+        <h2>Remote {connectionLabel ? `· ${connectionLabel}` : ""}</h2>
+        {#if connectionId && ondisconnect}
+          <button type="button" class="disconnect" onclick={ondisconnect}>
+            Disconnect
+          </button>
+        {/if}
+      </div>
       <div class="actions">
         <button type="button" disabled={!connectionId} onclick={() => newFolder(remote)}>
           New folder
@@ -721,13 +897,9 @@
         bind:showHidden={remote.showHidden}
         bind:filter={remote.filter}
         canGoUp={remote.path !== "/" && remote.path !== "."}
-        canGoBack={remote.historyIndex > 0}
-        canGoForward={remote.historyIndex + 1 < remote.history.length}
         loading={remote.loading}
         onnavigate={(path) => navigate(remote, path)}
         onup={() => up(remote)}
-        onback={() => back(remote)}
-        onforward={() => forward(remote)}
         onrefresh={() => void load(remote)}
         onsort={(key) => (remote.sortKey = key)}
       />
@@ -746,8 +918,11 @@
           selectedPath={remote.selectedPath}
           selectedPaths={remote.selectedPaths}
           source="remote"
-          onselect={(entry, additive) => selectEntry(remote, entry, additive)}
+          sortKey={remote.sortKey}
+          sortDirection={remote.sortDirection}
+          onselect={(entry, modifiers) => selectEntry(remote, entry, modifiers)}
           onopen={(entry) => openEntry(remote, entry)}
+          onsort={(key) => changeSort(remote, key)}
         />
       </div>
     {:else if remoteFallback}
@@ -842,9 +1017,20 @@
     justify-content: space-between;
     gap: 0.5rem;
   }
+  .pane-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
   .pane-heading h2 {
     font-size: 0.9rem;
     margin: 0 0 0.5rem;
+  }
+  .pane-title .disconnect {
+    margin-bottom: 0.5rem;
+    font: inherit;
+    font-size: 0.75rem;
   }
   .actions {
     display: flex;

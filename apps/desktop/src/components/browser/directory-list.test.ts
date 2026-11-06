@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DirectoryList from "./DirectoryList.svelte";
 import type { FileEntryView } from "../../lib/ipc/types";
@@ -36,6 +36,46 @@ function entries(count: number): FileEntryView[] {
 }
 
 describe("DirectoryList", () => {
+  it("sorts from column headers and exposes the active direction", async () => {
+    const onsort = vi.fn();
+    render(DirectoryList, {
+      props: {
+        entries: entries(2),
+        listingState: "complete",
+        sortKey: "name",
+        sortDirection: "asc",
+        onsort,
+        onselect: vi.fn(),
+        onopen: vi.fn()
+      }
+    });
+
+    expect(
+      screen.getByRole("columnheader", { name: /Name/ }).getAttribute("aria-sort")
+    ).toBe("ascending");
+    await fireEvent.click(screen.getByRole("button", { name: /Size/ }));
+    expect(onsort).toHaveBeenCalledWith("size");
+    expect(screen.getByRole("button", { name: /Name/ }).tabIndex).toBe(0);
+  });
+
+  it("reports Shift and Cmd/Ctrl modifiers to the pane", async () => {
+    const onselect = vi.fn();
+    render(DirectoryList, {
+      props: {
+        entries: entries(2),
+        listingState: "complete",
+        onselect,
+        onopen: vi.fn()
+      }
+    });
+
+    await fireEvent.click(screen.getByText(/file-0\.bin/), { shiftKey: true });
+    expect(onselect).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "/local/file-0.bin" }),
+      { shift: true, toggle: false }
+    );
+  });
+
   it("renders as many rows as the measured viewport can show", () => {
     Object.defineProperty(Element.prototype, "clientHeight", {
       configurable: true,

@@ -7,6 +7,7 @@
   import HostKeyPrompt from "./components/connections/HostKeyPrompt.svelte";
   import SecurityPrompt from "./components/connections/SecurityPrompt.svelte";
   import DualPane from "./components/browser/DualPane.svelte";
+  import PaneLinkToggle from "./components/browser/PaneLinkToggle.svelte";
   import InternalPreview from "./components/previews/InternalPreview.svelte";
   import QueueManager from "./components/queue/QueueManager.svelte";
   import AutomationPanel from "./components/automation/AutomationPanel.svelte";
@@ -38,6 +39,7 @@
   import { newTab, restoreTabs } from "./lib/tabs/restore";
   import { prepareAndQuit } from "./lib/lifecycle/quit";
   import { subscribeTransferEvents } from "./lib/transfers/events";
+  import { connectionStatistics } from "./lib/transfers/stats";
   import {
     approveClient,
     automationStatus,
@@ -90,6 +92,8 @@
   } | null>(null);
   let securityProfile = $state<ConnectionProfile | null>(null);
   let securityFavorite = $state<ServerFavoriteView | null>(null);
+  let linkPanes = $state(false);
+  let linkSessionId = $state<string | null>(null);
   let hostKeyRequest = $state<{
     profile: ConnectionProfile;
     favorite: ServerFavoriteView | null;
@@ -217,7 +221,11 @@
             ? {
                 ...transfer,
                 state: event.state,
-                error: event.error?.message ?? transfer.error
+                error: event.error?.message ?? transfer.error,
+                transferredBytes: event.transferredBytes ?? transfer.transferredBytes,
+                totalBytes: event.totalBytes ?? transfer.totalBytes,
+                startedAt: event.startedAt ?? transfer.startedAt,
+                completedAt: event.completedAt ?? transfer.completedAt
               }
             : transfer
         );
@@ -284,6 +292,16 @@
   const selectedConnection = $derived(
     active.find((connection) => connection.connectionId === selectedConnectionId) ?? null
   );
+
+  $effect(() => {
+    const session = selectedConnection?.connectionId ?? null;
+    if (session !== linkSessionId) {
+      linkSessionId = session;
+      linkPanes = false;
+    }
+  });
+
+  const connectionStats = $derived(connectionStatistics(active, transfers, profiles));
 
   const paletteEntries = $derived(
     buildEntries({
@@ -819,13 +837,20 @@
     }
   }
 
+  function tabDefaults() {
+    return {
+      sortKey: preferences?.sortKey ?? "name",
+      sortDirection: preferences?.sortDirection ?? "asc"
+    } as const;
+  }
+
   function ensureTab(connection: ConnectionView) {
     const existing = tabs.find((tab) => tab.connectionProfileId === connection.profileId);
     if (existing) {
       activeTabId = existing.id;
       return;
     }
-    const tab = newTab(connection.profileId, ".");
+    const tab = newTab(connection.profileId, ".", tabDefaults());
     tabs = [...tabs, tab];
     activeTabId = tab.id;
     void saveTabs();
@@ -872,7 +897,7 @@
   }
 
   function addTab() {
-    const tab = newTab(selectedConnection?.profileId ?? null, ".");
+    const tab = newTab(selectedConnection?.profileId ?? null, ".", tabDefaults());
     tabs = [...tabs, tab];
     activeTabId = tab.id;
     void saveTabs();
@@ -926,6 +951,7 @@
 
   function updateActiveTabView(settings: {
     sortKey: "name" | "size" | "date" | "type";
+    sortDirection: "asc" | "desc";
     showHidden: boolean;
     filter: string;
   }) {
@@ -938,6 +964,7 @@
             ...tab,
             viewSettings: {
               sortKey: settings.sortKey,
+              sortDirection: settings.sortDirection,
               showHidden: settings.showHidden,
               filter: settings.filter
             }
@@ -1424,18 +1451,10 @@
               {/each}
             </select>
           </label>
+          <PaneLinkToggle linked={linkPanes} ontoggle={() => (linkPanes = !linkPanes)} />
           <button type="button" onclick={() => void saveActiveAsFavorite()}>
             Save as favorite
           </button>
-          {#if selectedConnection}
-            <button
-              type="button"
-              class="danger"
-              onclick={() => void disconnect(selectedConnection)}
-            >
-              Disconnect
-            </button>
-          {/if}
         </div>
         {#if selectedConnection?.transportWarning}
           <p class="transport-warning" role="status">
@@ -1465,6 +1484,13 @@
           profileId={selectedConnection?.profileId ?? null}
           remotePath={activeTab?.currentPath ?? null}
           localPath={activeTab?.localPath ?? "."}
+          tabId={activeTab?.id ?? null}
+          linked={linkPanes}
+          ondisconnect={() => {
+            if (selectedConnection) {
+              void disconnect(selectedConnection);
+            }
+          }}
           localSelectedItems={activeTab?.localSelectedItems ?? []}
           remoteSelectedItems={activeTab?.selectedItems ?? []}
           splitRatio={workspaceLayout.splitRatio}
@@ -1479,6 +1505,10 @@
           defaultSortKey={activeTab?.viewSettings.sortKey ??
             preferences?.sortKey ??
             "name"}
+          defaultSortDirection={activeTab?.viewSettings.sortDirection ??
+            preferences?.sortDirection ??
+            "asc"}
+          defaultFilter={activeTab?.viewSettings.filter ?? ""}
           onviewchange={updateActiveTabView}
           onpreview={openPreview}
           oninspect={(entry, source) => (inspector = { source, path: entry.path })}
@@ -1489,6 +1519,7 @@
       <QueueManager
         {transfers}
         {queue}
+        {connectionStats}
         onpausequeue={pauseQueue}
         onresumequeue={resumeQueue}
         onsetconcurrency={setConcurrency}
@@ -1967,8 +1998,9 @@
     align-items: center;
     gap: 0.4rem;
   }
-  .connection-picker .danger {
-    color: var(--danger-text, #8a0000);
+  .connection-picker button[aria-pressed="true"] {
+    border-color: var(--accent);
+    color: var(--accent);
   }
   .transport-warning {
     margin: 0;

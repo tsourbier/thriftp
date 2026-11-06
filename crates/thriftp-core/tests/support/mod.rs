@@ -318,3 +318,97 @@ impl TransferStore for TempJsonTransferStore {
 fn io_error(error: std::io::Error) -> CoreError {
     CoreError::internal(format!("test storage error: {error}"))
 }
+
+/// Fake remote tree used by recursive permission tests.
+pub struct PermissionTreeRemote {
+    pub fail: Option<String>,
+}
+
+impl PermissionTreeRemote {
+    #[must_use]
+    pub fn new(fail: Option<String>) -> Self {
+        Self { fail }
+    }
+
+    fn entry(path: &str, entry_type: EntryType) -> FileEntry {
+        FileEntry {
+            name: path.rsplit('/').next().unwrap_or(path).to_owned(),
+            path: path.to_owned(),
+            entry_type,
+            size: None,
+            modified_at: None,
+            permissions: Some("644".to_owned()),
+            ownership: None,
+            hidden: false,
+            symlink_target: None,
+            capabilities: ProtocolCapabilities {
+                permissions: true,
+                ..ProtocolCapabilities::default()
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl RemoteFs for PermissionTreeRemote {
+    async fn connect(
+        &mut self,
+        _profile: &ConnectionProfile,
+        _credential: Option<Secret>,
+    ) -> CoreResult<()> {
+        Ok(())
+    }
+
+    async fn disconnect(&mut self) -> CoreResult<()> {
+        Ok(())
+    }
+
+    fn capabilities(&self) -> ProtocolCapabilities {
+        ProtocolCapabilities {
+            permissions: true,
+            ..ProtocolCapabilities::default()
+        }
+    }
+
+    async fn list_dir(&mut self, path: &str) -> CoreResult<Vec<FileEntry>> {
+        Ok(match path {
+            "/root" => vec![
+                Self::entry("/root/file.txt", EntryType::File),
+                Self::entry("/root/sub", EntryType::Directory),
+                Self::entry("/root/link", EntryType::Symlink),
+            ],
+            "/root/sub" => vec![Self::entry("/root/sub/nested.txt", EntryType::File)],
+            _ => Vec::new(),
+        })
+    }
+
+    async fn stat(&mut self, path: &str) -> CoreResult<FileEntry> {
+        if path == "/root" {
+            return Ok(Self::entry("/root", EntryType::Directory));
+        }
+        Err(CoreError::NotFound(path.to_owned()))
+    }
+
+    async fn mkdir(&mut self, _path: &str) -> CoreResult<()> {
+        Ok(())
+    }
+
+    async fn rename(&mut self, _from: &str, _to: &str) -> CoreResult<()> {
+        Ok(())
+    }
+
+    async fn delete_file(&mut self, _path: &str) -> CoreResult<()> {
+        Ok(())
+    }
+
+    async fn delete_dir(&mut self, _path: &str) -> CoreResult<()> {
+        Ok(())
+    }
+
+    async fn chmod(&mut self, path: &str, _mode: u32) -> CoreResult<()> {
+        if self.fail.as_deref() == Some(path) {
+            return Err(CoreError::PermissionDenied(path.to_owned()));
+        }
+        Ok(())
+    }
+}

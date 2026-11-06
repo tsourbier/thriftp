@@ -11,11 +11,29 @@ pub enum SortKey {
     Type,
 }
 
+/// Order applied to a browser listing after its sort key is resolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum SortDirection {
+    /// Ascending order, the default for existing and new view settings.
+    #[default]
+    Asc,
+    /// Descending order.
+    Desc,
+}
+
+/// Per-session view state for one browsing tab.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ViewSettings {
+    /// Column used to order the listing.
     pub sort_key: SortKey,
+    /// Direction applied to `sort_key`; missing values deserialize as [`SortDirection::Asc`].
+    #[serde(default)]
+    pub sort_direction: SortDirection,
+    /// Whether hidden entries are included in the listing.
     pub show_hidden: bool,
+    /// Optional case-insensitive name filter.
     pub filter: Option<String>,
 }
 
@@ -23,6 +41,7 @@ impl Default for ViewSettings {
     fn default() -> Self {
         Self {
             sort_key: SortKey::Name,
+            sort_direction: SortDirection::Asc,
             show_hidden: false,
             filter: None,
         }

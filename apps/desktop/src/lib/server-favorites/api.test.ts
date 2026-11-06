@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("../ipc/client", () => ({
   ipc: {
     getProfile: vi.fn(),
-    serverFavoritesCreate: vi.fn()
+    serverFavoritesCreate: vi.fn(),
+    resolvePath: vi.fn()
   }
 }));
 
@@ -46,6 +47,37 @@ describe("server favorite API", () => {
       sshKeyRef: "~/.ssh/id_ed25519",
       authMethod: "sshPrivateKey"
     });
+  });
+
+  it("resolves absolute prefill paths and omits relative working paths", async () => {
+    vi.mocked(ipc.getProfile).mockResolvedValue({
+      connectionId: "connection-1",
+      profile: {
+        id: "profile-1",
+        displayName: "Production",
+        groupLabel: null,
+        protocol: "sftp",
+        host: "prod.example",
+        port: 22,
+        username: "deploy",
+        authMethod: "password",
+        timeoutSeconds: 30,
+        sshKeyRef: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        lastUsedAt: null
+      }
+    });
+    vi.mocked(ipc.resolvePath).mockImplementation(async (source, path) => ({
+      originalPath: path,
+      path: source === "local" ? "/Users/me/Projects" : "/srv/www",
+      fallback: "none"
+    }));
+
+    const prefill = await prefillFavorite("connection-1", ".", "/srv/www");
+    expect(prefill.initial.localPath).toBeNull();
+    expect(prefill.initial.remotePath).toBe("/srv/www");
+    expect(ipc.resolvePath).toHaveBeenCalledWith("remote", "/srv/www", "connection-1");
   });
 
   it("creates a favorite through the IPC contract", async () => {

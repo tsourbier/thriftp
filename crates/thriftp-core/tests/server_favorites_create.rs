@@ -44,6 +44,24 @@ fn create_and_reload_from_store() {
 }
 
 #[test]
+fn creates_a_favorite_with_a_remote_path() {
+    let store: std::sync::Arc<dyn MetadataStore> = std::sync::Arc::new(MemoryStore::default());
+    let service = ServerFavoriteService::new(std::sync::Arc::clone(&store));
+    let credentials = CredentialService::new(Box::new(MemoryCredentialStore::available()));
+    let mut favorite = input("with-path");
+    favorite.remote_path = Some("/srv/www".to_owned());
+
+    let created = service
+        .create(favorite, CredentialPolicy::Ask, None, None, &credentials)
+        .unwrap();
+    assert_eq!(created.remote_path.as_deref(), Some("/srv/www"));
+    assert_eq!(
+        service.list().unwrap()[0].remote_path.as_deref(),
+        Some("/srv/www")
+    );
+}
+
+#[test]
 fn invalid_profile_is_rejected() {
     let service = ServerFavoriteService::new(std::sync::Arc::new(MemoryStore::default()));
     let credentials = CredentialService::new(Box::new(MemoryCredentialStore::available()));

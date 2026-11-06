@@ -90,6 +90,18 @@ fn metadata_reports_permissions_and_ownership_support() {
 }
 
 #[test]
+fn unparseable_permissions_explain_the_limitation() {
+    let mut entry = entry("/tmp/file.txt");
+    entry.permissions = Some("not-octal".to_owned());
+    let metadata = metadata_from_entry(&entry);
+    let detail = metadata.permission_detail.expect("unavailable detail");
+    assert!(detail.mode.is_none());
+    assert!(detail.symbolic.is_none());
+    assert!(!detail.editable);
+    assert!(detail.reason.is_some());
+}
+
+#[test]
 fn permissions_format_and_parse() {
     assert_eq!(symbolic_permissions("640").as_deref(), Some("rw-r-----"));
     assert_eq!(parse_octal_mode("644").unwrap(), 0o644);

@@ -4,6 +4,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import SaveFavoriteDialog from "./SaveFavoriteDialog.svelte";
 import type { ReusableCredential } from "../../lib/ipc/types";
 
+vi.mock("../../lib/favorites/path-browser", () => ({
+  browseLocalFolder: vi.fn()
+}));
+
+import { browseLocalFolder } from "../../lib/favorites/path-browser";
+
 afterEach(cleanup);
 
 describe("SaveFavoriteDialog", () => {
@@ -32,6 +38,53 @@ describe("SaveFavoriteDialog", () => {
     expect(profile.host).toBe("example.test");
     expect(policy).toBe("save");
     expect(secret).toBe("secret");
+  });
+
+  it("fills the local path from the native folder browser", async () => {
+    vi.mocked(browseLocalFolder).mockResolvedValue("/Users/me/Downloads");
+    render(SaveFavoriteDialog, { props: { onsave: vi.fn(), oncancel: vi.fn() } });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Browse" }));
+    expect(await screen.findByDisplayValue("/Users/me/Downloads")).toBeTruthy();
+    expect(browseLocalFolder).toHaveBeenCalled();
+  });
+
+  it("keeps the previous local path when browsing is cancelled", async () => {
+    vi.mocked(browseLocalFolder).mockResolvedValue(null);
+    render(SaveFavoriteDialog, {
+      props: {
+        initial: { localPath: "/Users/me/Projects" },
+        onsave: vi.fn(),
+        oncancel: vi.fn()
+      }
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Browse" }));
+    expect((screen.getByLabelText("Local path") as HTMLInputElement).value).toBe(
+      "/Users/me/Projects"
+    );
+  });
+
+  it("keeps validation feedback visible with the actions reachable", async () => {
+    render(SaveFavoriteDialog, { props: { onsave: vi.fn(), oncancel: vi.fn() } });
+
+    await fireEvent.input(screen.getByLabelText("Name"), {
+      target: { value: "Alpha" }
+    });
+    await fireEvent.input(screen.getByLabelText("Host"), {
+      target: { value: "example.test" }
+    });
+    await fireEvent.input(screen.getByLabelText("Username"), {
+      target: { value: "tester" }
+    });
+    await fireEvent.input(screen.getByLabelText("Remote path"), {
+      target: { value: "relative/path" }
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByText("Remote path must be an absolute server path.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeTruthy();
   });
 
   it("can cancel without saving", async () => {

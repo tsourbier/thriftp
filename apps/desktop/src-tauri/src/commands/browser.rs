@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter, State};
@@ -422,6 +422,69 @@ pub async fn browser_chmod(
     browser::permissions::chmod_remote(remote.as_mut(), &path, mode)
         .await
         .map_err(DesktopError::from)
+}
+
+/// Reject recursive permission changes that were not explicitly confirmed.
+pub fn require_recursive_confirmation(confirmed: bool) -> Result<(), DesktopError> {
+    if confirmed {
+        return Ok(());
+    }
+    Err(DesktopError::from(CoreError::Conflict(
+        "recursive permission changes require confirmation".to_owned(),
+    )))
+}
+
+/// Apply a permission mode to every descendant of a remote directory.
+#[tauri::command]
+pub async fn browser_chmod_recursive(
+    state: State<'_, AppState>,
+    connection_id: String,
+    path: String,
+    mode: u32,
+    confirmed: bool,
+) -> Result<browser::permissions::RecursivePermissionResult, DesktopError> {
+    require_recursive_confirmation(confirmed)?;
+    let connection_id = parse_id(&connection_id).map_err(DesktopError::from)?;
+    let shared = {
+        let service = state.connections.lock().await;
+        service.session(connection_id).map_err(DesktopError::from)?
+    };
+    let mut remote = shared.lock().await;
+    browser::permissions::chmod_remote_recursive(remote.as_mut(), &path, mode)
+        .await
+        .map_err(DesktopError::from)
+}
+
+/// Return whether a local directory can be opened for listing.
+#[must_use]
+pub fn probe_local_directory(path: &Path) -> bool {
+    std::fs::read_dir(path).is_ok()
+}
+
+/// Check whether a local or remote directory is readable before navigating to it.
+#[tauri::command]
+pub async fn browser_probe_directory(
+    state: State<'_, AppState>,
+    source: String,
+    path: String,
+    connection_id: Option<String>,
+) -> Result<bool, DesktopError> {
+    match source.as_str() {
+        "local" => Ok(probe_local_directory(Path::new(&path))),
+        "remote" => {
+            let connection_id = parse_id(connection_id.as_deref().unwrap_or_default())
+                .map_err(DesktopError::from)?;
+            let shared = {
+                let service = state.connections.lock().await;
+                service.session(connection_id).map_err(DesktopError::from)?
+            };
+            let mut remote = shared.lock().await;
+            Ok(remote.list_dir(&path).await.is_ok())
+        }
+        other => Err(DesktopError::from(CoreError::validation(format!(
+            "unknown directory source: {other}"
+        )))),
+    }
 }
 
 /// Resolve a saved local or remote path to an accessible location.

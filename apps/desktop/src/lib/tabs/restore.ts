@@ -1,5 +1,5 @@
 import { ipc } from "../ipc/client";
-import type { BrowsingSession } from "../ipc/types";
+import type { BrowsingSession, ViewSettings } from "../ipc/types";
 
 export type RestoredTab = BrowsingSession & {
   disconnected: boolean;
@@ -24,7 +24,11 @@ export async function restoreTabs(
 
 export function newTab(
   connectionProfileId: string | null,
-  currentPath = "."
+  currentPath = ".",
+  defaults: Pick<ViewSettings, "sortKey" | "sortDirection"> = {
+    sortKey: "name",
+    sortDirection: "asc"
+  }
 ): BrowsingSession {
   return {
     id: crypto.randomUUID(),
@@ -33,7 +37,12 @@ export function newTab(
     localPath: ".",
     history: [currentPath],
     historyIndex: 0,
-    viewSettings: { sortKey: "name", showHidden: false, filter: null },
+    viewSettings: {
+      sortKey: defaults.sortKey,
+      sortDirection: defaults.sortDirection,
+      showHidden: false,
+      filter: null
+    },
     selectedItems: [],
     localSelectedItems: [],
     createdAt: new Date().toISOString(),

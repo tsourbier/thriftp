@@ -1,9 +1,22 @@
 import type { FileEntryView, SortKey } from "../ipc/types";
 
+/** Modifier state reported by keyboard selection. */
+export type KeyboardSelectionModifiers = {
+  shift: boolean;
+  toggle: boolean;
+};
+
+function selectionModifiers(event: KeyboardEvent): KeyboardSelectionModifiers {
+  return {
+    shift: event.shiftKey,
+    toggle: event.metaKey || event.ctrlKey
+  };
+}
+
 export type BrowserKeyActions = {
   entries: FileEntryView[];
   selectedPath: string | null;
-  onselect: (entry: FileEntryView) => void;
+  onselect: (entry: FileEntryView, modifiers?: KeyboardSelectionModifiers) => void;
   onopen: (entry: FileEntryView) => void;
   onup: () => void;
   onback?: () => void;
@@ -30,14 +43,14 @@ export function handleBrowserKey(
       if (actions.entries.length > 0) {
         const next =
           actions.entries[Math.min(actions.entries.length - 1, selectedIndex + 1)];
-        actions.onselect(next);
+        actions.onselect(next, selectionModifiers(event));
         return true;
       }
       return false;
     case "ArrowUp":
       if (actions.entries.length > 0) {
         const next = actions.entries[Math.max(0, selectedIndex - 1)];
-        actions.onselect(next);
+        actions.onselect(next, selectionModifiers(event));
         return true;
       }
       return false;

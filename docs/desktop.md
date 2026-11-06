@@ -77,3 +77,30 @@ SFTP key authentication discovers conventional private keys in the platform
 SSH directory and exposes a key button beside the field for the native file
 chooser. Discovery returns file names and paths only; key contents are never
 read or displayed.
+
+## Browser workflow polish
+
+- File selection follows native desktop conventions: Shift selects a contiguous
+  range and Cmd/Ctrl toggles individual items, including Shift/Cmd/Ctrl+Arrow
+  from the keyboard. Selections survive refreshes and re-sorts while the items
+  remain present.
+- Name, Size, and Modified column headers sort their pane and toggle between
+  ascending and descending order. Each pane keeps its own sort state, and the
+  active tab restores its saved sort, hidden-file, and filter settings when
+  selected again.
+- The remote session line has a Link/Unlink control. When linked, every
+  navigation action mirrors the same relative movement in the other pane; if the
+  counterpart does not exist or cannot be read, the other pane stays unchanged.
+- The queue shows per-connection completed-file counts, completed volume, and
+  average speed for the current connection session. Reconnecting starts new
+  statistics.
+- The file inspector shows User/Group/World Read/Write/Execute permissions,
+  octal and symbolic summaries, and a copy-path action. Remote permissions can
+  be changed; local permissions are read-only. Directories offer a confirmed
+  recursive **Apply to enclosed…** action that skips symbolic links and reports
+  partial failures.
+- The remote pane header owns the Disconnect action, and the pane toolbars no
+  longer show back/forward buttons.
+- Favorite dialogs support browsing for a local folder, keep their actions
+  reachable in a scrollable body, and resolve active-tab working paths before
+  saving so a remote path no longer blocks creation.

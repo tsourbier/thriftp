@@ -1,11 +1,17 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import TransferList from "../transfers/TransferList.svelte";
+  import {
+    formatBytes,
+    formatSpeed,
+    type ConnectionTransferStats
+  } from "../../lib/transfers/stats";
   import type { Priority, QueueView, TransferView } from "../../lib/ipc/types";
 
   let {
     transfers,
     queue,
+    connectionStats = [],
     onpausequeue,
     onresumequeue,
     onsetconcurrency,
@@ -21,6 +27,7 @@
   }: {
     transfers: TransferView[];
     queue: QueueView | null;
+    connectionStats?: ConnectionTransferStats[];
     onpausequeue: () => void;
     onresumequeue: () => void;
     onsetconcurrency: (limit: number) => void;
@@ -157,6 +164,21 @@
         <button type="button" onclick={onclearhistory}>Clear history</button>
       </div>
 
+      {#if connectionStats.length > 0}
+        <div class="connection-stats" aria-label="Connection transfer statistics">
+          {#each connectionStats as stat (stat.connectionId)}
+            <div class="connection-stat">
+              <strong>{stat.displayName}</strong>
+              <span>
+                {stat.completedFiles} files · {formatBytes(stat.completedBytes)} · {formatSpeed(
+                  stat.averageBytesPerSecond
+                )}
+              </span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+
       <TransferList
         transfers={visibleTransfers}
         onpause={onpausetransfer}
@@ -251,6 +273,21 @@
     align-items: center;
     gap: 0.35rem;
     font-size: 0.75rem;
+  }
+  .connection-stats {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .connection-stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.75rem;
+    color: GrayText;
+  }
+  .connection-stat strong {
+    color: var(--text);
+    font-weight: 600;
   }
   .inline {
     display: inline-flex;

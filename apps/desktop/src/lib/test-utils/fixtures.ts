@@ -83,7 +83,12 @@ export function browsingSession(
     localPath: "/Users/me/Projects",
     history: ["/srv/www"],
     historyIndex: 0,
-    viewSettings: { sortKey: "name", showHidden: false, filter: "" },
+    viewSettings: {
+      sortKey: "name",
+      sortDirection: "asc",
+      showHidden: false,
+      filter: ""
+    },
     selectedItems: [],
     localSelectedItems: [],
     createdAt: now,
